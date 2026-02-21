@@ -3,6 +3,7 @@ import { prisma } from '../server';
 import { z } from 'zod';
 import { categorizeTransaction, suggestCategory, CATEGORIES } from '../services/categorizer.js';
 import { chatWithOllama } from '../services/ollama.js';
+import { parseBankSMS, batchParseSMS, nlpParseSMS } from '../services/smsParser.js';
 
 const createTransactionSchema = z.object({
     amount: z.number().positive(),
@@ -78,55 +79,166 @@ If you cannot determine a field, make your best guess or omit it. But "amount" a
         }
     });
 
-    // ─── SMS Parsing ─────────────────────────────────────────────
-    // Parses raw bank SMS text into transaction data using Regex
+    // ─── SMS Parsing (Enhanced) ─────────────────────────────────
+    // Uses dedicated smsParser with 15+ Indian bank templates + NLP fallback
     app.post('/parse-sms', async (request: any, reply) => {
         const { text } = z.object({ text: z.string() }).parse(request.body);
 
-        // Common Indian Bank SMS Regex Patterns
-        const amountRegex = /(?:Rs\.?|INR)\s*([\d,]+(?:\.\d{1,2})?)/i;
-        const debitedRegex = /debited|deducted|spent|paid/i;
-        const creditedRegex = /credited|deposited|received/i;
-        const merchantRegex = /(?:vpa|to|at|info)\s*[:-]?\s*([a-zA-Z0-9.\s]+?)(?=\s*(?:on|ref|upi|avl|\.|$))/i;
+        const parsed = parseBankSMS(text);
 
-        let amount = 0;
-        let type: 'INCOME' | 'EXPENSE' = 'EXPENSE';
-        let merchant = 'Unknown Merchant';
-        let success = false;
-
-        const amountMatch = text.match(amountRegex);
-        if (amountMatch) {
-            amount = parseFloat(amountMatch[1].replace(/,/g, ''));
-            success = true;
-        }
-
-        if (creditedRegex.test(text) && !debitedRegex.test(text)) {
-            type = 'INCOME';
-        }
-
-        const merchantMatch = text.match(merchantRegex);
-        if (merchantMatch && merchantMatch[1]) {
-            merchant = merchantMatch[1].trim();
-        }
-
-        // Auto-categorize if we got the merchant
-        const category = suggestCategory(text, merchant).category;
-
-        if (success) {
+        if (parsed) {
             return reply.send({
                 success: true,
-                parsedData: {
-                    amount,
-                    type,
-                    merchant,
-                    category,
-                    description: text.substring(0, 50) + '...', // Save snippet of SMS
-                    source: 'SMS'
-                }
+                transaction: {
+                    amount: parsed.amount,
+                    type: parsed.type,
+                    merchant: parsed.merchant,
+                    category: parsed.category,
+                    description: parsed.description,
+                    source: parsed.source,
+                    account: parsed.accountHint,
+                    balance: parsed.balance,
+                    confidence: parsed.confidence,
+                    date: parsed.date,
+                },
+                method: 'regex',
             });
         }
 
+        // NLP fallback for unrecognized formats
+        try {
+            const nlpResults = await nlpParseSMS([text]);
+            if (nlpResults.length > 0) {
+                const r = nlpResults[0];
+                return reply.send({
+                    success: true,
+                    transaction: {
+                        amount: r.amount,
+                        type: r.type,
+                        merchant: r.merchant,
+                        category: r.category,
+                        description: r.description,
+                        source: 'SMS',
+                        account: r.accountHint || 'Unknown',
+                        balance: r.balance,
+                        confidence: r.confidence,
+                        date: r.date,
+                    },
+                    method: 'NLP',
+                });
+            }
+        } catch (e) {
+            console.error('[SMS] NLP fallback failed:', e);
+        }
+
         return reply.status(400).send({ success: false, error: 'Could not parse SMS format' });
+    });
+
+    // ─── Batch SMS Parsing ──────────────────────────────────────
+    app.post('/parse-sms/batch', async (request: any, reply) => {
+        const { messages } = z.object({
+            messages: z.array(z.string()).min(1).max(100),
+        }).parse(request.body);
+
+        const { parsed, failed, stats } = batchParseSMS(messages);
+
+        // Try NLP on failed messages
+        let nlpParsed: typeof parsed = [];
+        if (failed.length > 0) {
+            try {
+                nlpParsed = await nlpParseSMS(failed);
+            } catch (e) {
+                console.error('[SMS] Batch NLP fallback failed:', e);
+            }
+        }
+
+        return reply.send({
+            success: true,
+            parsed: [...parsed, ...nlpParsed],
+            failedCount: failed.length - nlpParsed.length,
+            stats: {
+                ...stats,
+                nlpRecovered: nlpParsed.length,
+                totalSuccess: parsed.length + nlpParsed.length,
+            },
+        });
+    });
+
+    // ─── Import SMS as Transactions ─────────────────────────────
+    app.post('/import-sms', async (request: any, reply) => {
+        const userId = request.user.userId;
+        const { messages } = z.object({
+            messages: z.array(z.string()).min(1).max(200),
+        }).parse(request.body);
+
+        const { parsed, failed, stats } = batchParseSMS(messages);
+
+        // Try NLP on failed
+        let nlpParsed: typeof parsed = [];
+        if (failed.length > 0) {
+            try {
+                nlpParsed = await nlpParseSMS(failed);
+            } catch (e) { /* ignore NLP failures */ }
+        }
+
+        const allParsed = [...parsed, ...nlpParsed];
+
+        // Deduplicate by amount + date + merchant (avoid double imports)
+        const existing = await prisma.transaction.findMany({
+            where: { userId, source: { in: ['SMS' as const, 'UPI' as const] } },
+            select: { amount: true, date: true, merchant: true },
+        });
+
+        const existingSet = new Set(
+            existing.map(t => `${t.amount}-${t.date.toISOString().substring(0, 10)}-${t.merchant}`)
+        );
+
+        const newTransactions = allParsed.filter(p => {
+            const key = `${p.amount}-${p.date.toISOString().substring(0, 10)}-${p.merchant}`;
+            return !existingSet.has(key);
+        });
+
+        // Create transactions in bulk
+        // Map TRANSFER → EXPENSE since Prisma enum only has INCOME/EXPENSE
+        const created = await prisma.transaction.createMany({
+            data: newTransactions.map(t => ({
+                userId,
+                amount: t.amount,
+                type: (t.type === 'TRANSFER' ? 'EXPENSE' : t.type) as 'INCOME' | 'EXPENSE',
+                category: t.category,
+                merchant: t.merchant,
+                description: t.description.substring(0, 200),
+                source: t.source as 'SMS' | 'UPI' | 'MANUAL' | 'OCR',
+                date: t.date,
+            })),
+        });
+
+        // Update budgets for expenses
+        const expenses = newTransactions.filter(t => t.type === 'EXPENSE');
+        const categoryTotals: Record<string, number> = {};
+        expenses.forEach(t => {
+            categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+        });
+
+        for (const [category, total] of Object.entries(categoryTotals)) {
+            await prisma.budget.updateMany({
+                where: { userId, category },
+                data: { spent: { increment: total } },
+            });
+        }
+
+        return reply.send({
+            success: true,
+            imported: created.count,
+            duplicatesSkipped: allParsed.length - newTransactions.length,
+            parseFailures: messages.length - allParsed.length,
+            stats: {
+                total: messages.length,
+                parsed: allParsed.length,
+                imported: created.count,
+                avgConfidence: stats.avgConfidence,
+            },
+        });
     });
 
     // ─── Create Transaction ──────────────────────────────────────

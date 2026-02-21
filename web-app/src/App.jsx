@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocati
 import {
   Sparkles, LayoutDashboard, Users, Shield, BarChart3, LogOut, Target,
   MessageSquare, BookOpen, Building2, Package, Activity, GraduationCap,
-  PieChart, Calculator, Bell, TrendingUp, Cpu
+  PieChart, Calculator, Bell, TrendingUp, Cpu, Smartphone, Brain
 } from 'lucide-react';
 import { getAuthToken, setAuthToken, api } from './api';
 import i18n from './i18n';
@@ -33,6 +33,8 @@ import PartnerDashboard from './pages/partner/Dashboard';
 import PartnerProducts from './pages/partner/Products';
 import WaitingRoom from './pages/WaitingRoom';
 import OnboardingPage from './pages/OnboardingPage';
+import PredictiveAnalysisPage from './pages/PredictiveAnalysisPage';
+import TransactionImportPage from './pages/TransactionImportPage';
 
 function Sidebar({ user, onLogout }) {
   const { t } = useTranslation();
@@ -47,6 +49,8 @@ function Sidebar({ user, onLogout }) {
     { to: '/goals', icon: Target, label: 'Savings Goals', roles: ['END_USER'] },
     { to: '/health', icon: Activity, label: 'Health Score', roles: ['END_USER'] },
     { to: '/learn', icon: GraduationCap, label: 'Learn', roles: ['END_USER'] },
+    { to: '/analysis', icon: Brain, label: 'Predictive Analysis', roles: ['END_USER'] },
+    { to: '/import-sms', icon: Smartphone, label: 'Import SMS', roles: ['END_USER'] },
     { to: '/notifications', icon: Bell, label: 'Notifications', roles: ['END_USER'] },
     { to: '/profile', icon: Users, label: 'Profile', roles: ['END_USER'] },
 
@@ -152,6 +156,8 @@ function ProtectedLayout({ user, onLogout }) {
           <Route path="/goals" element={<GoalsPage />} />
           <Route path="/health" element={<HealthScorePage />} />
           <Route path="/learn" element={<LearnPage />} />
+          <Route path="/analysis" element={<PredictiveAnalysisPage />} />
+          <Route path="/import-sms" element={<TransactionImportPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/advisor-chat" element={<AdvisorChat />} />
           <Route path="/recommendations" element={<RecommendationsPage />} />

@@ -1,6 +1,11 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server.js';
 import { createTranslationHook } from '../middleware/translate.js';
+import {
+    detectAnomalies, getForecast, getAdaptiveBudget, getCategoryInsights,
+    checkMLServiceHealth, fallbackAnomalyDetection, fallbackForecast,
+    type AnomalyResult, type ForecastResult, type AdaptiveBudgetResult, type CategoryInsightResult,
+} from '../services/mlService.js';
 
 export async function insightRoutes(app: FastifyInstance) {
     app.addHook('preHandler', app.authenticate as any);
@@ -389,226 +394,230 @@ export async function insightRoutes(app: FastifyInstance) {
         return reply.send({ lessons });
     });
 
-    // ─── Spending Anomaly Detection ──────────────────────────────
-    // Uses statistical analysis (mean + 2σ) to flag unusual spending
+    // ─── Spending Anomaly Detection (ML Service) ──────────────────
+    // Uses Isolation Forest via Python ML service, with statistical fallback
     app.get('/anomalies', async (request: any, reply) => {
         const userId = request.user.userId;
         const now = new Date();
-        const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
 
-        // Get 3 months of spending by category (for baseline)
-        const historicalTxns = await prisma.transaction.findMany({
-            where: { userId, type: 'EXPENSE', date: { gte: threeMonthsAgo, lt: startOfMonth } },
-            select: { amount: true, category: true, date: true },
-        });
-
-        // Get this month's spending by category
-        const currentTxns = await prisma.transaction.findMany({
-            where: { userId, type: 'EXPENSE', date: { gte: startOfMonth } },
-            select: { amount: true, category: true, date: true, merchant: true },
-        });
-
-        // Build monthly averages and std dev per category from historical data
-        const categoryStats: Record<string, { months: Record<string, number> }> = {};
-
-        historicalTxns.forEach(t => {
-            const monthKey = `${t.date.getFullYear()}-${t.date.getMonth()}`;
-            if (!categoryStats[t.category]) categoryStats[t.category] = { months: {} };
-            if (!categoryStats[t.category].months[monthKey]) categoryStats[t.category].months[monthKey] = 0;
-            categoryStats[t.category].months[monthKey] += t.amount;
-        });
-
-        // Calculate mean and standard deviation
-        const anomalies: Array<{
-            category: string;
-            currentSpend: number;
-            averageSpend: number;
-            standardDeviation: number;
-            multiplier: number;
-            severity: 'warning' | 'critical';
-            message: string;
-        }> = [];
-
-        // Current month spending by category
-        const currentByCategory: Record<string, number> = {};
-        currentTxns.forEach(t => {
-            currentByCategory[t.category] = (currentByCategory[t.category] || 0) + t.amount;
-        });
-
-        for (const [category, stats] of Object.entries(categoryStats)) {
-            const monthlyValues = Object.values(stats.months);
-            if (monthlyValues.length < 2) continue; // Need at least 2 months of data
-
-            const mean = monthlyValues.reduce((a, b) => a + b, 0) / monthlyValues.length;
-            const variance = monthlyValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / monthlyValues.length;
-            const stdDev = Math.sqrt(variance);
-
-            const currentSpend = currentByCategory[category] || 0;
-            const threshold = mean + 2 * stdDev; // 2 standard deviations = ~95% confidence
-
-            if (currentSpend > threshold && currentSpend > mean * 1.5) {
-                const multiplier = mean > 0 ? currentSpend / mean : 0;
-                anomalies.push({
-                    category,
-                    currentSpend: Math.round(currentSpend),
-                    averageSpend: Math.round(mean),
-                    standardDeviation: Math.round(stdDev),
-                    multiplier: parseFloat(multiplier.toFixed(1)),
-                    severity: multiplier > 3 ? 'critical' : 'warning',
-                    message: multiplier >= 3
-                        ? `🚨 You spent ${multiplier.toFixed(1)}x your usual ${category} budget this month (₹${Math.round(currentSpend).toLocaleString()} vs avg ₹${Math.round(mean).toLocaleString()})! Was there a special occasion?`
-                        : `⚠️ Your ${category} spending is higher than usual — ₹${Math.round(currentSpend).toLocaleString()} vs your average of ₹${Math.round(mean).toLocaleString()}.`,
-                });
-            }
-        }
-
-        // Also detect single large transactions (outliers within this month)
-        const allCurrentAmounts = currentTxns.map(t => t.amount);
-        const overallMean = allCurrentAmounts.length > 0
-            ? allCurrentAmounts.reduce((a, b) => a + b, 0) / allCurrentAmounts.length
-            : 0;
-        const overallStdDev = allCurrentAmounts.length > 1
-            ? Math.sqrt(allCurrentAmounts.reduce((sum, val) => sum + Math.pow(val - overallMean, 2), 0) / allCurrentAmounts.length)
-            : 0;
-
-        const largeTransactions = currentTxns
-            .filter(t => t.amount > overallMean + 2 * overallStdDev && t.amount > 1000)
-            .map(t => ({
-                amount: t.amount,
-                category: t.category,
-                merchant: t.merchant,
-                date: t.date,
-                message: `💰 Unusually large expense: ₹${t.amount.toLocaleString()} on ${t.category}${t.merchant ? ` at ${t.merchant}` : ''}`,
-            }));
-
-        return reply.send({
-            model: 'IsolationForest-v1 (statistical anomaly detection)',
-            anomalies: anomalies.sort((a, b) => b.multiplier - a.multiplier),
-            largeTransactions,
-            totalAnomalies: anomalies.length,
-            totalLargeTransactions: largeTransactions.length,
-            analysisWindow: '3-month rolling baseline',
-        });
-    });
-
-    // ─── Spending Forecast ───────────────────────────────────────
-    // Projects month-end spending from current trajectory with confidence bands
-    app.get('/forecast', async (request: any, reply) => {
-        const userId = request.user.userId;
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        const dayOfMonth = now.getDate();
-        const daysRemaining = daysInMonth - dayOfMonth;
-
-        // Get this month's daily spending
-        const thisMonthTxns = await prisma.transaction.findMany({
-            where: { userId, type: 'EXPENSE', date: { gte: startOfMonth } },
-            select: { amount: true, date: true, category: true },
+        const transactions = await prisma.transaction.findMany({
+            where: { userId, date: { gte: sixMonthsAgo } },
+            select: { id: true, amount: true, category: true, date: true, description: true, merchant: true, type: true },
             orderBy: { date: 'asc' },
         });
 
-        // Get last 3 months for comparison
-        const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        const historicalTxns = await prisma.transaction.findMany({
-            where: { userId, type: 'EXPENSE', date: { gte: threeMonthsAgo, lt: startOfMonth } },
-            select: { amount: true, date: true },
-        });
+        const txInput = transactions.map(t => ({
+            id: t.id,
+            amount: t.amount,
+            category: t.category,
+            type: t.type,
+            date: t.date.toISOString(),
+            description: t.description || '',
+            merchant: t.merchant || '',
+        }));
 
-        // Calculate historical monthly average
-        const monthlyTotals: Record<string, number> = {};
-        historicalTxns.forEach(t => {
-            const key = `${t.date.getFullYear()}-${t.date.getMonth()}`;
-            monthlyTotals[key] = (monthlyTotals[key] || 0) + t.amount;
-        });
-        const historicalMonths = Object.values(monthlyTotals);
-        const historicalAvg = historicalMonths.length > 0
-            ? historicalMonths.reduce((a, b) => a + b, 0) / historicalMonths.length
-            : 0;
+        let result: AnomalyResult;
 
-        // Current month totals
-        const totalSpentSoFar = thisMonthTxns.reduce((s, t) => s + t.amount, 0);
-        const dailyAvgThisMonth = dayOfMonth > 0 ? totalSpentSoFar / dayOfMonth : 0;
-
-        // Linear projection
-        const projectedTotal = dailyAvgThisMonth * daysInMonth;
-
-        // Confidence bands (±15%)
-        const projectedLow = projectedTotal * 0.85;
-        const projectedHigh = projectedTotal * 1.15;
-
-        // Daily spending data for chart
-        const dailySpending: Array<{ day: number; amount: number; cumulative: number }> = [];
-        let cumulative = 0;
-        for (let day = 1; day <= daysInMonth; day++) {
-            if (day <= dayOfMonth) {
-                const dayAmount = thisMonthTxns
-                    .filter(t => t.date.getDate() === day)
-                    .reduce((s, t) => s + t.amount, 0);
-                cumulative += dayAmount;
-                dailySpending.push({ day, amount: Math.round(dayAmount), cumulative: Math.round(cumulative) });
+        try {
+            const mlHealthy = await checkMLServiceHealth();
+            if (mlHealthy) {
+                const { sensitivity } = request.query as any;
+                result = await detectAnomalies(txInput, sensitivity ? parseFloat(sensitivity) : 0.1);
             } else {
-                // Projected days
-                cumulative += dailyAvgThisMonth;
-                dailySpending.push({ day, amount: Math.round(dailyAvgThisMonth), cumulative: Math.round(cumulative) });
+                result = fallbackAnomalyDetection(txInput);
             }
+        } catch (error) {
+            console.error('[Insights] ML anomaly detection failed, using fallback:', error);
+            result = fallbackAnomalyDetection(txInput);
         }
 
-        // Category-level forecasts
-        const categorySpending: Record<string, number> = {};
-        thisMonthTxns.forEach(t => {
-            categorySpending[t.category] = (categorySpending[t.category] || 0) + t.amount;
-        });
-        const categoryForecasts = Object.entries(categorySpending).map(([cat, spent]) => ({
-            category: cat,
-            spentSoFar: Math.round(spent),
-            projectedTotal: Math.round((spent / dayOfMonth) * daysInMonth),
-            dailyRate: Math.round(spent / dayOfMonth),
-        })).sort((a, b) => b.projectedTotal - a.projectedTotal);
+        return reply.send(result);
+    });
 
-        // Budget comparison
+    // ─── Spending Forecast (ML Service) ────────────────────────────
+    // Uses Prophet time-series via Python ML service, with linear fallback
+    app.get('/forecast', async (request: any, reply) => {
+        const userId = request.user.userId;
+        const now = new Date();
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+
+        const transactions = await prisma.transaction.findMany({
+            where: { userId, date: { gte: sixMonthsAgo } },
+            select: { id: true, amount: true, category: true, date: true, description: true, merchant: true, type: true },
+            orderBy: { date: 'asc' },
+        });
+
+        const txInput = transactions.map(t => ({
+            id: t.id,
+            amount: t.amount,
+            category: t.category,
+            type: t.type,
+            date: t.date.toISOString(),
+            description: t.description || '',
+            merchant: t.merchant || '',
+        }));
+
+        // Get budgets for alerts
         const budgets = await prisma.budget.findMany({ where: { userId } });
-        const budgetAlerts = budgets
-            .map(b => {
-                const catSpent = categorySpending[b.category] || 0;
-                const projectedCatTotal = dayOfMonth > 0 ? (catSpent / dayOfMonth) * daysInMonth : 0;
-                return {
-                    category: b.category,
-                    budgetLimit: b.limit,
-                    projectedSpend: Math.round(projectedCatTotal),
-                    willExceedBudget: projectedCatTotal > b.limit,
-                    projectedOverage: Math.max(0, Math.round(projectedCatTotal - b.limit)),
-                };
-            })
-            .filter(b => b.willExceedBudget);
+        const budgetMap: Record<string, number> = {};
+        budgets.forEach(b => { budgetMap[b.category] = b.limit; });
+
+        const { days } = request.query as any;
+        const forecastDays = days ? parseInt(days) : 30;
+
+        let result: ForecastResult;
+
+        try {
+            const mlHealthy = await checkMLServiceHealth();
+            if (mlHealthy) {
+                result = await getForecast(txInput, forecastDays, budgetMap);
+            } else {
+                result = fallbackForecast(txInput, forecastDays);
+            }
+        } catch (error) {
+            console.error('[Insights] ML forecast failed, using fallback:', error);
+            result = fallbackForecast(txInput, forecastDays);
+        }
+
+        return reply.send(result);
+    });
+
+    // ─── Adaptive Budget Recommendations ─────────────────────────
+    app.get('/adaptive-budget', async (request: any, reply) => {
+        const userId = request.user.userId;
+        const now = new Date();
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+
+        const [transactions, income, user] = await Promise.all([
+            prisma.transaction.findMany({
+                where: { userId, date: { gte: sixMonthsAgo } },
+                select: { id: true, amount: true, category: true, date: true, description: true, merchant: true, type: true },
+                orderBy: { date: 'asc' },
+            }),
+            prisma.transaction.aggregate({
+                where: { userId, type: 'INCOME', date: { gte: new Date(now.getFullYear(), now.getMonth(), 1) } },
+                _sum: { amount: true },
+            }),
+            prisma.user.findUnique({ where: { id: userId }, select: { incomeRange: true } }),
+        ]);
+
+        const monthlyIncome = income._sum.amount || 0;
+
+        if (monthlyIncome === 0) {
+            return reply.send({
+                rule: '50/30/20',
+                estimatedIncome: 0,
+                allocation: { needs: 0, wants: 0, savings: 0 },
+                categoryBudgets: [],
+                tips: ['Add your income transactions to get personalized budget recommendations.'],
+            });
+        }
+
+        const txInput = transactions.map(t => ({
+            id: t.id,
+            amount: t.amount,
+            category: t.category,
+            type: t.type,
+            date: t.date.toISOString(),
+            description: t.description || '',
+            merchant: t.merchant || '',
+        }));
+
+        try {
+            const mlHealthy = await checkMLServiceHealth();
+            if (mlHealthy) {
+                const result = await getAdaptiveBudget(txInput, monthlyIncome, user?.incomeRange || undefined);
+                return reply.send(result);
+            }
+        } catch (error) {
+            console.error('[Insights] ML adaptive budget failed:', error);
+        }
+
+        // Fallback: simple 50/30/20 rule
+        const isLowIncome = monthlyIncome < 15000;
+        const needsRatio = isLowIncome ? 0.60 : 0.50;
+        const wantsRatio = isLowIncome ? 0.20 : 0.30;
+        const savingsRatio = 0.20;
 
         return reply.send({
-            model: 'Prophet-v1 (linear time-series projection)',
-            currentMonth: {
-                totalSpentSoFar: Math.round(totalSpentSoFar),
-                dayOfMonth,
-                daysRemaining,
-                dailyAverage: Math.round(dailyAvgThisMonth),
+            rule: isLowIncome ? '60/20/20 (Low-Income)' : '50/30/20 (Standard)',
+            estimatedIncome: monthlyIncome,
+            allocation: {
+                needs: Math.round(monthlyIncome * needsRatio),
+                wants: Math.round(monthlyIncome * wantsRatio),
+                savings: Math.round(monthlyIncome * savingsRatio),
             },
-            projection: {
-                projected: Math.round(projectedTotal),
-                low: Math.round(projectedLow),
-                high: Math.round(projectedHigh),
-                confidence: '85%',
-                vsHistoricalAvg: historicalAvg > 0
-                    ? `${((projectedTotal - historicalAvg) / historicalAvg * 100).toFixed(1)}%`
-                    : 'N/A',
-            },
-            historicalAvg: Math.round(historicalAvg),
-            dailySpending,
-            categoryForecasts,
-            budgetAlerts,
-            insight: projectedTotal > historicalAvg * 1.2
-                ? `📈 You're on track to spend ₹${Math.round(projectedTotal).toLocaleString()} this month — ${((projectedTotal / historicalAvg - 1) * 100).toFixed(0)}% more than your usual ₹${Math.round(historicalAvg).toLocaleString()}. Consider cutting back in the next ${daysRemaining} days.`
-                : projectedTotal < historicalAvg * 0.8
-                    ? `✨ Great job! You're on track to spend only ₹${Math.round(projectedTotal).toLocaleString()} — saving more than usual!`
-                    : `📊 You're on track to spend ₹${Math.round(projectedTotal).toLocaleString()} this month, similar to your average of ₹${Math.round(historicalAvg).toLocaleString()}.`,
+            categoryBudgets: [],
+            tips: [
+                isLowIncome ? 'Focus on building a ₹5,000 emergency fund first' : 'Allocate at least 20% to savings and investments',
+                'Track every expense — small amounts add up quickly',
+            ],
+        });
+    });
+
+    // ─── Category Insights ───────────────────────────────────────
+    app.get('/category-insights', async (request: any, reply) => {
+        const userId = request.user.userId;
+        const now = new Date();
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+
+        const transactions = await prisma.transaction.findMany({
+            where: { userId, type: 'EXPENSE', date: { gte: sixMonthsAgo } },
+            select: { id: true, amount: true, category: true, date: true, description: true, merchant: true, type: true },
+            orderBy: { date: 'asc' },
+        });
+
+        const txInput = transactions.map(t => ({
+            id: t.id,
+            amount: t.amount,
+            category: t.category,
+            type: t.type,
+            date: t.date.toISOString(),
+            description: t.description || '',
+            merchant: t.merchant || '',
+        }));
+
+        try {
+            const mlHealthy = await checkMLServiceHealth();
+            if (mlHealthy) {
+                const result = await getCategoryInsights(txInput);
+                return reply.send(result);
+            }
+        } catch (error) {
+            console.error('[Insights] ML category insights failed:', error);
+        }
+
+        // Fallback: basic aggregation from transactions
+        const categoryTotals: Record<string, { total: number; count: number; amounts: number[]; merchants: Record<string, number> }> = {};
+        for (const t of transactions) {
+            if (!categoryTotals[t.category]) categoryTotals[t.category] = { total: 0, count: 0, amounts: [], merchants: {} };
+            categoryTotals[t.category].total += t.amount;
+            categoryTotals[t.category].count++;
+            categoryTotals[t.category].amounts.push(t.amount);
+            const merchant = t.merchant || t.description || 'Unknown';
+            categoryTotals[t.category].merchants[merchant] = (categoryTotals[t.category].merchants[merchant] || 0) + t.amount;
+        }
+
+        const categories = Object.entries(categoryTotals)
+            .map(([cat, data]) => ({
+                category: cat,
+                totalSpent: Math.round(data.total),
+                avgAmount: Math.round(data.total / data.count),
+                transactionCount: data.count,
+                trend: 'stable' as string,
+                topMerchants: Object.entries(data.merchants)
+                    .sort(([, a], [, b]) => b - a)
+                    .slice(0, 3)
+                    .map(([merchant, total]) => ({ merchant, total: Math.round(total) })),
+                savingTip: null as string | null,
+            }))
+            .sort((a, b) => b.totalSpent - a.totalSpent);
+
+        return reply.send({
+            categories,
+            merchantInsights: [],
+            model: 'Basic aggregation fallback',
         });
     });
 

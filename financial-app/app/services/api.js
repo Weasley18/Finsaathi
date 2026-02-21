@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // API base URL — change to your backend URL
 const API_BASE_URL = __DEV__
-    ? 'http://192.168.137.83:3001/api'
+    ? 'http://10.186.131.244:3001/api'
     : 'https://api.finsaathi.com/api';
 
 const api = axios.create({
@@ -157,5 +157,55 @@ api.clearChatHistory = (roomId) => api.delete(`/chat/history${roomId ? `?roomId=
 api.getHealthScore = () => api.get('/insights/health-score');
 api.getGoals = () => api.get('/goals');
 api.getTransactions = () => api.get('/transactions');
+
+// ─── Predictive Analysis (ML) ───────────────────────────────
+api.getAnomalies = (sensitivity) => api.get(`/insights/anomalies${sensitivity ? `?sensitivity=${sensitivity}` : ''}`);
+api.getForecast = (days = 30) => api.get(`/insights/forecast?days=${days}`);
+api.getAdaptiveBudget = () => api.get('/insights/adaptive-budget');
+api.getCategoryInsights = () => api.get('/insights/category-insights');
+
+// ─── SMS Parsing ────────────────────────────────────────────
+api.parseSms = (message) => api.post('/transactions/parse-sms', { message });
+api.batchParseSms = (messages) => api.post('/transactions/parse-sms/batch', { messages });
+api.importSms = (messages) => api.post('/transactions/import-sms', { messages });
+
+// ─── Content & Quizzes ─────────────────────────────────────
+api.getLessons = () => api.get('/content/lessons');
+api.getLesson = (id) => api.get(`/content/lessons/${id}`);
+api.getLessonQuizzes = (lessonId) => api.get(`/content/lessons/${lessonId}/quizzes`);
+api.submitQuizAttempt = (quizId, selectedIndex) => api.post(`/content/quizzes/${quizId}/attempt`, { selectedIndex });
+api.completeLesson = (lessonId) => api.post(`/content/lessons/${lessonId}/complete`);
+api.getLearningProgress = () => api.get('/content/progress');
+api.getLeaderboard = () => api.get('/content/leaderboard');
+
+// ─── Gamification ───────────────────────────────────────────
+api.getGamificationStatus = () => api.get('/gamification/status');
+api.logActivity = (action) => api.post('/gamification/log', { action });
+
+// ─── Admin ──────────────────────────────────────────────────
+api.getAdminStats = () => api.get('/admin/stats');
+api.getPendingApprovals = () => api.get('/admin/pending-approvals');
+api.approveUser = (userId) => api.post(`/admin/approve/${userId}`);
+api.rejectUser = (userId, reason) => api.post(`/admin/reject/${userId}`, { reason });
+api.getAdvisors = () => api.get('/admin/advisors');
+api.updateAdvisorTier = (id, tier) => api.put(`/admin/advisors/${id}/tier`, { tier });
+api.assignClient = (advisorId, clientId) => api.post(`/admin/advisors/${advisorId}/assign`, { clientId });
+api.getUsers = (params) => api.get('/admin/users', { params });
+api.getAllLessons = () => api.get('/content/admin/lessons');
+api.createLesson = (data) => api.post('/content/admin/lessons', data);
+api.updateLesson = (id, data) => api.put(`/content/admin/lessons/${id}`, data);
+api.deleteLesson = (id) => api.delete(`/content/admin/lessons/${id}`);
+api.getAllSchemes = () => api.get('/content/admin/schemes');
+api.createScheme = (data) => api.post('/content/admin/schemes', data);
+api.updateScheme = (id, data) => api.put(`/content/admin/schemes/${id}`, data);
+api.deleteScheme = (id) => api.delete(`/content/admin/schemes/${id}`);
+
+// ─── Partner ────────────────────────────────────────────────
+api.getPartnerDashboard = () => api.get('/partners/dashboard');
+api.getPartnerAnalytics = () => api.get('/partners/analytics');
+api.getPartnerProducts = () => api.get('/partners/products');
+api.createPartnerProduct = (data) => api.post('/partners/products', data);
+api.updatePartnerProduct = (id, data) => api.put(`/partners/products/${id}`, data);
+api.deletePartnerProduct = (id) => api.delete(`/partners/products/${id}`);
 
 export default api;

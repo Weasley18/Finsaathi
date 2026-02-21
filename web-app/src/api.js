@@ -58,6 +58,10 @@ export const api = {
     createTransaction: (data) => apiFetch('/transactions', { method: 'POST', body: JSON.stringify(data) }),
     getSpendingByCategory: () => apiFetch('/transactions/analytics/by-category'),
     getMonthlyTrend: () => apiFetch('/transactions/analytics/monthly-trend'),
+    parseSms: (text) => apiFetch('/transactions/parse-sms', { method: 'POST', body: JSON.stringify({ text }) }),
+    parseText: (text) => apiFetch('/transactions/parse-text', { method: 'POST', body: JSON.stringify({ text }) }),
+    batchParseSms: (messages) => apiFetch('/transactions/parse-sms/batch', { method: 'POST', body: JSON.stringify({ messages }) }),
+    importSms: (messages) => apiFetch('/transactions/import-sms', { method: 'POST', body: JSON.stringify({ messages }) }),
 
     // Budgets
     getBudgets: () => apiFetch('/budgets'),
@@ -99,6 +103,11 @@ export const api = {
     getHealthScore: () => apiFetch('/insights/health-score'),
     getSpendingInsights: () => apiFetch('/insights/spending'),
     getLessons: () => apiFetch('/insights/lessons'),
+    getAnomalies: (sensitivity) => apiFetch(`/insights/anomalies${sensitivity ? `?sensitivity=${sensitivity}` : ''}`),
+    getForecast: (days) => apiFetch(`/insights/forecast${days ? `?days=${days}` : ''}`),
+    getInvestmentRecommendations: () => apiFetch('/insights/investment-recommendations'),
+    getAdaptiveBudget: () => apiFetch('/insights/adaptive-budget'),
+    getCategoryInsights: () => apiFetch('/insights/category-insights'),
 
     // Chat Rooms
     getChatRooms: (type) => apiFetch(`/chatrooms${type ? `?type=${type}` : ''}`),
@@ -140,6 +149,26 @@ export const api = {
     createScheme: (data) => apiFetch('/content/schemes', { method: 'POST', body: JSON.stringify(data) }),
     updateScheme: (id, data) => apiFetch(`/content/schemes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteScheme: (id) => apiFetch(`/content/schemes/${id}`, { method: 'DELETE' }),
+
+    // Content Generation & Quizzes
+    generateLesson: (topic, difficulty, userContext) => apiFetch('/content/generate', { method: 'POST', body: JSON.stringify({ topic, difficulty, userContext }) }),
+    publishLesson: (id) => apiFetch(`/content/generate/publish/${id}`, { method: 'POST' }),
+    getContentSuggestions: () => apiFetch('/content/suggestions'),
+    getLessonQuizzes: (lessonId) => apiFetch(`/content/lessons/${lessonId}/quizzes`),
+    submitQuizAttempt: (quizId, selectedIndex) => apiFetch(`/content/quizzes/${quizId}/attempt`, { method: 'POST', body: JSON.stringify({ selectedIndex }) }),
+    completeLesson: (lessonId) => apiFetch(`/content/lessons/${lessonId}/complete`, { method: 'POST' }),
+    getLearningProgress: () => apiFetch('/content/progress'),
+    getLeaderboard: () => apiFetch('/content/leaderboard'),
+    viewLesson: (id) => apiFetch(`/content/lessons/${id}/view`, { method: 'POST' }),
+
+    // Gamification
+    getGamificationStatus: () => apiFetch('/gamification/status'),
+    logActivity: (action) => apiFetch('/gamification/log-activity', { method: 'POST', body: JSON.stringify({ action }) }),
+
+    // Analytics
+    getAnalyticsDashboard: () => apiFetch('/analytics/dashboard'),
+    getAnalyticsTrend: () => apiFetch('/analytics/trend'),
+    getAnalyticsCategories: () => apiFetch('/analytics/categories'),
 
     // Partner
     getPartnerDashboard: () => apiFetch('/partners/dashboard'),

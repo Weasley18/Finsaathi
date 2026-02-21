@@ -91,6 +91,7 @@ async function main() {
     app.register(callRoutes, { prefix: '/api/calls' });
     app.register(flagRoutes, { prefix: '/api/flags' });
     app.register(chatroomRoutes, { prefix: '/api/chatrooms' });
+    app.register(gamificationRoutes, { prefix: '/api/gamification' });
 
     // ─── Health Check ──────────────────────────────────────────
     app.get('/api/health', async () => ({

@@ -24,6 +24,11 @@ const useFinanceStore = create((set, get) => ({
     healthScore: null,
     spendingInsights: null,
     lessons: [],
+    anomalies: null,
+    forecast: null,
+    adaptiveBudget: null,
+    learningProgress: null,
+    leaderboard: [],
 
     // Chat
     chatMessages: [],
@@ -162,10 +167,62 @@ const useFinanceStore = create((set, get) => ({
 
     fetchLessons: async () => {
         try {
-            const { data } = await api.get('/insights/lessons');
+            const { data } = await api.get('/content/lessons');
             set({ lessons: data.lessons });
         } catch (error) {
             console.error('Lessons error:', error);
+        }
+    },
+
+    // ─── Predictive Analysis ───────────────────────────────────
+    fetchAnomalies: async () => {
+        try {
+            const { data } = await api.getAnomalies();
+            set({ anomalies: data });
+            return data;
+        } catch (error) {
+            console.error('Anomalies error:', error);
+        }
+    },
+
+    fetchForecast: async (days = 30) => {
+        try {
+            const { data } = await api.getForecast(days);
+            set({ forecast: data });
+            return data;
+        } catch (error) {
+            console.error('Forecast error:', error);
+        }
+    },
+
+    fetchAdaptiveBudget: async () => {
+        try {
+            const { data } = await api.getAdaptiveBudget();
+            set({ adaptiveBudget: data });
+            return data;
+        } catch (error) {
+            console.error('Adaptive budget error:', error);
+        }
+    },
+
+    // ─── Learning Progress ─────────────────────────────────────
+    fetchLearningProgress: async () => {
+        try {
+            const { data } = await api.getLearningProgress();
+            set({ learningProgress: data });
+            return data;
+        } catch (error) {
+            console.error('Learning progress error:', error);
+        }
+    },
+
+    fetchLeaderboard: async () => {
+        try {
+            const { data } = await api.getLeaderboard();
+            set({ leaderboard: data.leaderboard || [] });
+            return data;
+        } catch (error) {
+            console.error('Leaderboard error:', error);
         }
     },
 

@@ -35,6 +35,15 @@ export default function AppNavigator() {
                 <Stack.Screen name="SIPCalculator" component={Screens.SIPCalculator} />
                 <Stack.Screen name="WaitingRoom" component={Screens.WaitingRoom} />
                 <Stack.Screen name="DiscoverMarketplace" component={Screens.DiscoverMarketplace} />
+                <Stack.Screen name="SMSImport" component={Screens.SMSImport} />
+                <Stack.Screen name="LessonDetail" component={Screens.LessonDetail} />
+                <Stack.Screen name="PredictiveAnalysis" component={Screens.PredictiveAnalysis} />
+                <Stack.Screen name="AdminDashboard" component={Screens.AdminDashboard} />
+                <Stack.Screen name="AdminApprovals" component={Screens.AdminApprovals} />
+                <Stack.Screen name="AdminContent" component={Screens.AdminContent} />
+                <Stack.Screen name="AdminAdvisors" component={Screens.AdminAdvisors} />
+                <Stack.Screen name="PartnerDashboard" component={Screens.PartnerDashboard} />
+                <Stack.Screen name="PartnerProducts" component={Screens.PartnerProducts} />
             </Stack.Navigator>
         </NavigationContainer>
     );
