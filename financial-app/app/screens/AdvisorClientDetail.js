@@ -1,12 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Phone, Shield, TrendingUp, AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, Phone, Shield, TrendingUp, AlertTriangle, MessageSquare, Send, Save } from 'lucide-react-native';
 import { colors, glassmorphism } from '../theme';
+import api from '../services/api';
 
 export default function AdvisorClientDetail({ route, navigation }) {
     const { client } = route.params;
+    const [notes, setNotes] = useState('');
+    const [notesList, setNotesList] = useState([]);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        api.getAdvisorNotes(client.id).then(res => setNotesList(res.data?.notes || [])).catch(() => {});
+    }, [client.id]);
+
+    const saveNote = async () => {
+        if (!notes.trim()) return;
+        setSaving(true);
+        try {
+            await api.createAdvisorNote(client.id, notes.trim());
+            setNotes('');
+            const res = await api.getAdvisorNotes(client.id);
+            setNotesList(res.data?.notes || []);
+        } catch (err) { Alert.alert('Error', 'Failed to save note'); }
+        finally { setSaving(false); }
+    };
 
     // Mock detailed data
     const healthBreakdown = [
@@ -46,17 +66,33 @@ export default function AdvisorClientDetail({ route, navigation }) {
 
                 {/* Quick Actions */}
                 <View style={styles.actionRow}>
-                    <TouchableOpacity style={styles.actionBtn}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('DirectMessages', { userId: client.id, userName: client.name })}>
+                        <MessageSquare size={20} color={colors.textPrimary} />
+                        <Text style={styles.actionText}>Chat</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => {
+                        api.scheduleCall(client.id, new Date(Date.now() + 86400000).toISOString(), 30)
+                            .then(() => Alert.alert('Scheduled', 'Call scheduled for tomorrow'))
+                            .catch(() => Alert.alert('Error', 'Failed to schedule'));
+                    }}>
                         <Phone size={20} color={colors.textPrimary} />
                         <Text style={styles.actionText}>Call</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionBtn}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => {
+                        api.sendRecommendation(client.id, 'Start SIP', 'Consider starting a monthly SIP in an index fund to build long-term wealth.', 'investment')
+                            .then(() => Alert.alert('Sent', 'Recommendation sent'))
+                            .catch(() => Alert.alert('Error', 'Failed to send'));
+                    }}>
                         <TrendingUp size={20} color={colors.textPrimary} />
-                        <Text style={styles.actionText}>Goals</Text>
+                        <Text style={styles.actionText}>Advise</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionBtn, { borderColor: '#e74c3c' }]}>
+                    <TouchableOpacity style={[styles.actionBtn, { borderColor: '#e74c3c' }]} onPress={() => {
+                        api.flagClient(client.id, 'Needs financial review', 'medium')
+                            .then(() => Alert.alert('Flagged', 'Client flagged for review'))
+                            .catch(() => Alert.alert('Error', 'Failed to flag'));
+                    }}>
                         <AlertTriangle size={20} color="#e74c3c" />
-                        <Text style={[styles.actionText, { color: '#e74c3c' }]}>Alert</Text>
+                        <Text style={[styles.actionText, { color: '#e74c3c' }]}>Flag</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -79,9 +115,34 @@ export default function AdvisorClientDetail({ route, navigation }) {
                 {/* Advisor Notes - Simplified */}
                 <Text style={styles.sectionTitle}>Notes</Text>
                 <View style={styles.healthCard}>
-                    <Text style={{ color: colors.textSecondary, fontStyle: 'italic' }}>
-                        No notes added yet. Tap to add.
-                    </Text>
+                    <TextInput
+                        style={{ color: colors.textPrimary, fontSize: 14, minHeight: 60, textAlignVertical: 'top' }}
+                        placeholder="Add a note about this client..."
+                        placeholderTextColor={colors.textMuted}
+                        value={notes}
+                        onChangeText={setNotes}
+                        multiline
+                    />
+                    <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, backgroundColor: colors.accent, paddingVertical: 10, borderRadius: 12 }}
+                        onPress={saveNote}
+                        disabled={saving || !notes.trim()}
+                    >
+                        <Save size={16} color="#000" />
+                        <Text style={{ color: '#000', fontWeight: '600' }}>{saving ? 'Saving...' : 'Save Note'}</Text>
+                    </TouchableOpacity>
+                    {notesList.length > 0 && (
+                        <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 12 }}>
+                            {notesList.slice(0, 5).map((n, i) => (
+                                <View key={i} style={{ marginBottom: 8, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: colors.accent }}>
+                                    <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>{n.note || n.content}</Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>
+                                        {new Date(n.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
                 </View>
 
             </ScrollView>

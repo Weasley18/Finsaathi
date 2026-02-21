@@ -2,12 +2,12 @@ import { createHash } from 'crypto';
 import { chatWithOllama } from './ollama';
 
 // ─── Multilingual Translation Service ────────────────────────────
-// Uses IndicTrans2 (AI4Bharat) via Hugging Face Inference API for
-// high-quality Indic language translation. Supports 12 languages.
+// Uses Helsinki-NLP opus-mt multilingual models via HuggingFace Inference API.
+// Falls back to Ollama LLM translation if HF is unavailable.
 
 const HF_API_KEY = process.env.HUGGINGFACE_API_KEY || '';
-const HF_INDIC_TO_EN = 'https://api-inference.huggingface.co/models/ai4bharat/indictrans2-indic-en-1B';
-const HF_EN_TO_INDIC = 'https://api-inference.huggingface.co/models/ai4bharat/indictrans2-en-indic-1B';
+const HF_MUL_TO_EN = 'https://router.huggingface.co/hf-inference/models/Helsinki-NLP/opus-mt-mul-en';
+const HF_EN_TO_MUL = 'https://router.huggingface.co/hf-inference/models/Helsinki-NLP/opus-mt-en-mul';
 
 // ─── Redis-based Translation Cache ──────────────────────────────
 import Redis from 'ioredis';
@@ -51,20 +51,20 @@ export const SUPPORTED_LANGUAGES: Record<string, string> = {
     as: 'Assamese',
 };
 
-// IndicTrans2 uses BCP-47 / Flores-200 language codes
+// Helsinki-NLP opus-mt uses ISO 639-3 language codes with >>code<< prefix
 const LANG_CODE_MAP: Record<string, string> = {
-    en: 'eng_Latn',
-    hi: 'hin_Deva',
-    ta: 'tam_Taml',
-    te: 'tel_Telu',
-    bn: 'ben_Beng',
-    mr: 'mar_Deva',
-    gu: 'guj_Gujr',
-    kn: 'kan_Knda',
-    ml: 'mal_Mlym',
-    pa: 'pan_Guru',
-    or: 'ory_Orya',
-    as: 'asm_Beng',
+    en: 'eng',
+    hi: 'hin',
+    ta: 'tam',
+    te: 'tel',
+    bn: 'ben',
+    mr: 'mar',
+    gu: 'guj',
+    kn: 'kan',
+    ml: 'mal',
+    pa: 'pan',
+    or: 'ori',
+    as: 'asm',
 };
 
 // ─── Language Detection ──────────────────────────────────────────
@@ -96,12 +96,11 @@ export function detectLanguage(text: string): string {
     return 'en';
 }
 
-// ─── IndicTrans2 HuggingFace API Call ────────────────────────────
-async function callIndicTrans2(
+// ─── Helsinki-NLP opus-mt HuggingFace API Call ───────────────────
+async function callOpusMT(
     text: string,
     sourceLang: string,
     targetLang: string,
-    apiUrl: string
 ): Promise<string> {
     const srcCode = LANG_CODE_MAP[sourceLang];
     const tgtCode = LANG_CODE_MAP[targetLang];
@@ -111,13 +110,19 @@ async function callIndicTrans2(
         return text;
     }
 
-    const payload = {
-        inputs: text,
-        parameters: {
-            src_lang: srcCode,
-            tgt_lang: tgtCode,
-        },
-    };
+    // Determine direction and prepend language tag
+    let apiUrl: string;
+    let input: string;
+
+    if (targetLang === 'en') {
+        // Indic → English: use mul-en model with source language tag
+        apiUrl = HF_MUL_TO_EN;
+        input = `>>${srcCode}<< ${text}`;
+    } else {
+        // English → Indic: use en-mul model with target language tag
+        apiUrl = HF_EN_TO_MUL;
+        input = `>>${tgtCode}<< ${text}`;
+    }
 
     const response = await fetch(apiUrl, {
         method: 'POST',
@@ -125,7 +130,7 @@ async function callIndicTrans2(
             'Authorization': `Bearer ${HF_API_KEY}`,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ inputs: input }),
     });
 
     if (!response.ok) {
@@ -135,12 +140,22 @@ async function callIndicTrans2(
 
     const result = await response.json();
 
-    // HuggingFace returns [{ translation_text: "..." }] or [{ generated_text: "..." }]
+    // HuggingFace returns [{ translation_text: "..." }]
     if (Array.isArray(result) && result.length > 0) {
         return result[0].translation_text || result[0].generated_text || text;
     }
 
     return text;
+}
+
+// ─── Ollama Fallback Translation ─────────────────────────────────
+async function translateWithOllama(text: string, fromLang: string, toLang: string): Promise<string> {
+    const fromName = SUPPORTED_LANGUAGES[fromLang] || fromLang;
+    const toName = SUPPORTED_LANGUAGES[toLang] || toLang;
+    const systemPrompt = 'You are a professional translator. Respond with ONLY the translated text, nothing else. No explanations.';
+    const messages = [{ role: 'user', content: `Translate from ${fromName} to ${toName}:\n\n${text}` }];
+    const result = await chatWithOllama(systemPrompt, messages);
+    return result.trim();
 }
 
 // ─── Translate to English ────────────────────────────────────────
@@ -156,13 +171,24 @@ export async function translateToEnglish(text: string, sourceLang: string): Prom
     }
 
     try {
-        const translated = await callIndicTrans2(text, sourceLang, 'en', HF_INDIC_TO_EN);
-        await setCachedTranslation(cacheKey, translated);
-        console.log(`[Translation] IndicTrans2: ${sourceLang} → en`);
-        return translated;
+        if (HF_API_KEY) {
+            const translated = await callOpusMT(text, sourceLang, 'en');
+            await setCachedTranslation(cacheKey, translated);
+            console.log(`[Translation] opus-mt: ${sourceLang} → en`);
+            return translated;
+        }
+        throw new Error('No HF API key, falling back to Ollama');
     } catch (error) {
-        console.error('[Translation] Error translating to English:', error);
-        return text; // fallback to original
+        console.warn('[Translation] HF failed, trying Ollama fallback:', (error as Error).message);
+        try {
+            const translated = await translateWithOllama(text, sourceLang, 'en');
+            await setCachedTranslation(cacheKey, translated);
+            console.log(`[Translation] Ollama fallback: ${sourceLang} → en`);
+            return translated;
+        } catch (ollamaErr) {
+            console.error('[Translation] All methods failed:', ollamaErr);
+            return text;
+        }
     }
 }
 
@@ -179,13 +205,24 @@ export async function translateFromEnglish(text: string, targetLang: string): Pr
     }
 
     try {
-        const translated = await callIndicTrans2(text, 'en', targetLang, HF_EN_TO_INDIC);
-        await setCachedTranslation(cacheKey, translated);
-        console.log(`[Translation] IndicTrans2: en → ${targetLang}`);
-        return translated;
+        if (HF_API_KEY) {
+            const translated = await callOpusMT(text, 'en', targetLang);
+            await setCachedTranslation(cacheKey, translated);
+            console.log(`[Translation] opus-mt: en → ${targetLang}`);
+            return translated;
+        }
+        throw new Error('No HF API key, falling back to Ollama');
     } catch (error) {
-        console.error('[Translation] Error translating from English:', error);
-        return text; // fallback to original
+        console.warn('[Translation] HF failed, trying Ollama fallback:', (error as Error).message);
+        try {
+            const translated = await translateWithOllama(text, 'en', targetLang);
+            await setCachedTranslation(cacheKey, translated);
+            console.log(`[Translation] Ollama fallback: en → ${targetLang}`);
+            return translated;
+        } catch (ollamaErr) {
+            console.error('[Translation] All methods failed:', ollamaErr);
+            return text;
+        }
     }
 }
 

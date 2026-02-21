@@ -148,6 +148,35 @@ export async function chatWithTools(
     }
 }
 
+// ─── Generate Chat Title ─────────────────────────────────────────
+// Creates a concise 3-5 word title from the first message in a chat.
+export async function generateChatTitle(firstMessage: string): Promise<string> {
+    try {
+        const client = getClient();
+        const response = await client.chat({
+            model: OLLAMA_MODEL,
+            messages: [
+                {
+                    role: 'system',
+                    content: 'Generate a concise 3-5 word title summarizing the user\'s chat topic. Return ONLY the title text, no quotes, no punctuation at the end, no explanation.',
+                },
+                { role: 'user', content: firstMessage },
+            ],
+            options: {
+                temperature: 0.3,
+                num_predict: 20,
+            },
+        });
+
+        const title = response.message.content.trim().replace(/^["']|["']$/g, '').slice(0, 80);
+        return title || 'New Chat';
+    } catch (error) {
+        console.error('[Title Gen] Failed:', error);
+        // Fallback: use first N chars of the message
+        return firstMessage.slice(0, 40).trim() + (firstMessage.length > 40 ? '...' : '');
+    }
+}
+
 // ─── Health Check ────────────────────────────────────────────────
 export async function checkOllamaHealth(): Promise<boolean> {
     try {

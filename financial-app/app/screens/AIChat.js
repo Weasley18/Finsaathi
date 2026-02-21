@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Send, Sparkles, Trash2, Volume2, Square } from 'lucide-react-native';
+import { ArrowLeft, Send, Sparkles, Plus, Volume2, Square, MoreVertical } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Speech from 'expo-speech';
 import useFinanceStore from '../store/financeStore';
@@ -13,15 +13,28 @@ export default function AIChat({ navigation }) {
   const { t, i18n } = useTranslation();
   const [input, setInput] = useState('');
   const [speakingMsgId, setSpeakingMsgId] = useState(null);
+  const [renameModalVisible, setRenameModalVisible] = useState(false);
+  const [renameTitle, setRenameTitle] = useState('');
+  const [renameRoomId, setRenameRoomId] = useState(null);
   const flatListRef = useRef(null);
-  const { chatMessages, chatLoading, fetchChatHistory, sendChatMessage, clearChat } = useFinanceStore();
 
+  const {
+    chatMessages, chatLoading, chatRooms, activeChatRoomId, chatRoomsLoading,
+    fetchChatRooms, createChatRoom, selectChatRoom, deleteChatRoom, renameChatRoom,
+    sendChatMessage,
+  } = useFinanceStore();
+
+  // Load rooms on mount
   useEffect(() => {
-    fetchChatHistory();
+    (async () => {
+      const rooms = await fetchChatRooms('AI_CHAT');
+      if (rooms.length > 0) {
+        await selectChatRoom(rooms[0].id);
+      }
+    })();
   }, []);
 
   useEffect(() => {
-    // Auto-scroll to bottom
     if (flatListRef.current && chatMessages.length > 0) {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 200);
     }
@@ -38,17 +51,55 @@ export default function AIChat({ navigation }) {
     }
   };
 
+  const handleNewRoom = async () => {
+    await createChatRoom('AI_CHAT');
+  };
+
+  const handleRoomLongPress = (room) => {
+    Alert.alert(
+      room.title || 'New Chat',
+      'What would you like to do?',
+      [
+        {
+          text: 'Rename',
+          onPress: () => {
+            setRenameRoomId(room.id);
+            setRenameTitle(room.title || '');
+            setRenameModalVisible(true);
+          },
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Delete Chat', 'Are you sure?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: () => deleteChatRoom(room.id) },
+            ]);
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleSaveRename = async () => {
+    if (renameTitle.trim() && renameRoomId) {
+      await renameChatRoom(renameRoomId, renameTitle.trim());
+    }
+    setRenameModalVisible(false);
+    setRenameRoomId(null);
+    setRenameTitle('');
+  };
+
   const handleSpeak = async (messageId, text) => {
     if (speakingMsgId === messageId) {
-      // Stop speaking
       await Speech.stop();
       setSpeakingMsgId(null);
     } else {
-      // Stop anything currently speaking first
       await Speech.stop();
       setSpeakingMsgId(messageId);
-
-      const cleanText = text.replace(/[*_~`]/g, ''); // Strip basic markdown bounds
+      const cleanText = text.replace(/[*_~`]/g, '');
       const ttsLangMap = {
         en: 'en-IN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN',
         bn: 'bn-IN', mr: 'mr-IN', gu: 'gu-IN', kn: 'kn-IN',
@@ -56,8 +107,7 @@ export default function AIChat({ navigation }) {
       };
       Speech.speak(cleanText, {
         language: ttsLangMap[i18n.language] || 'en-IN',
-        pitch: 1.0,
-        rate: 1.0,
+        pitch: 1.0, rate: 1.0,
         onDone: () => setSpeakingMsgId(null),
         onStopped: () => setSpeakingMsgId(null),
         onError: () => setSpeakingMsgId(null),
@@ -65,11 +115,8 @@ export default function AIChat({ navigation }) {
     }
   };
 
-  // Stop speaking when user exits screen
   useEffect(() => {
-    return () => {
-      Speech.stop();
-    };
+    return () => { Speech.stop(); };
   }, []);
 
   const quickActions = [
@@ -81,7 +128,6 @@ export default function AIChat({ navigation }) {
 
   const renderMessage = ({ item }) => {
     const isUser = item.role === 'user';
-
     return (
       <View style={[styles.messageRow, isUser ? styles.userRow : styles.botRow]}>
         {!isUser && (
@@ -89,10 +135,7 @@ export default function AIChat({ navigation }) {
             <Sparkles size={14} color={colors.accentLight} />
           </View>
         )}
-        <View style={[
-          styles.messageBubble,
-          isUser ? styles.userBubble : styles.botBubble,
-        ]}>
+        <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.botBubble]}>
           <Text style={[styles.messageText, isUser ? styles.userText : styles.botText]}>
             {item.content}
           </Text>
@@ -104,12 +147,8 @@ export default function AIChat({ navigation }) {
           <Text style={styles.messageTime}>
             {new Date(item.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
           </Text>
-
           {!isUser && (
-            <TouchableOpacity
-              style={styles.ttsBtn}
-              onPress={() => handleSpeak(item.id, item.content)}
-            >
+            <TouchableOpacity style={styles.ttsBtn} onPress={() => handleSpeak(item.id, item.content)}>
               {speakingMsgId === item.id ? (
                 <Square size={14} color={colors.accent} fill={colors.accent} />
               ) : (
@@ -131,7 +170,6 @@ export default function AIChat({ navigation }) {
       <Text style={styles.emptySubtitle}>
         I can help with budgets, investments, savings goals, government schemes, and more!
       </Text>
-
       <View style={styles.quickActionGrid}>
         {quickActions.map((action, i) => (
           <TouchableOpacity
@@ -168,9 +206,33 @@ export default function AIChat({ navigation }) {
             <Text style={styles.headerSubtitle}>{t('chat.online')}</Text>
           </View>
         </View>
-        <TouchableOpacity onPress={clearChat} style={styles.clearBtn}>
-          <Trash2 size={20} color={colors.textMuted} />
-        </TouchableOpacity>
+      </View>
+
+      {/* Room Tabs */}
+      <View style={styles.roomTabsContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.roomTabsScroll}>
+          <TouchableOpacity style={styles.newRoomBtn} onPress={handleNewRoom}>
+            <Plus size={16} color="#000" />
+          </TouchableOpacity>
+          {chatRooms.map(room => (
+            <TouchableOpacity
+              key={room.id}
+              style={[styles.roomTab, activeChatRoomId === room.id && styles.roomTabActive]}
+              onPress={() => selectChatRoom(room.id)}
+              onLongPress={() => handleRoomLongPress(room)}
+            >
+              <Text
+                style={[styles.roomTabText, activeChatRoomId === room.id && styles.roomTabTextActive]}
+                numberOfLines={1}
+              >
+                {room.title || 'New Chat'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          {chatRooms.length === 0 && !chatRoomsLoading && (
+            <Text style={styles.noRoomsText}>Tap + to start a chat</Text>
+          )}
+        </ScrollView>
       </View>
 
       {/* Chat Messages */}
@@ -184,17 +246,13 @@ export default function AIChat({ navigation }) {
           data={chatMessages}
           renderItem={renderMessage}
           keyExtractor={(item, index) => item.id || index.toString()}
-          contentContainerStyle={[
-            styles.messagesList,
-            chatMessages.length === 0 && styles.emptyList,
-          ]}
+          contentContainerStyle={[styles.messagesList, chatMessages.length === 0 && styles.emptyList]}
           ListEmptyComponent={renderEmpty}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         />
 
-        {/* Typing Indicator */}
         {chatLoading && (
-          <View style={[styles.messageRow, styles.botRow]}>
+          <View style={[styles.messageRow, styles.botRow, { paddingHorizontal: 16 }]}>
             <View style={styles.botAvatar}>
               <Sparkles size={14} color={colors.accentLight} />
             </View>
@@ -229,6 +287,34 @@ export default function AIChat({ navigation }) {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Rename Modal */}
+      <Modal visible={renameModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Rename Chat</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={renameTitle}
+              onChangeText={setRenameTitle}
+              placeholder="Enter new name"
+              placeholderTextColor={colors.textMuted}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalBtnCancel}
+                onPress={() => { setRenameModalVisible(false); setRenameRoomId(null); }}
+              >
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnSave} onPress={handleSaveRename}>
+                <Text style={styles.modalBtnSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -252,7 +338,40 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
   headerSubtitle: { fontSize: 12, color: colors.textMuted },
-  clearBtn: { padding: 8 },
+  // Room Tabs
+  roomTabsContainer: {
+    borderBottomWidth: 1, borderBottomColor: colors.divider,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  roomTabsScroll: {
+    paddingHorizontal: 12, paddingVertical: 8, gap: 8,
+    flexDirection: 'row', alignItems: 'center',
+  },
+  newRoomBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.accent,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 4,
+  },
+  roomTab: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    maxWidth: 140,
+  },
+  roomTabActive: {
+    backgroundColor: 'rgba(186,143,13,0.15)',
+    borderColor: colors.accent,
+  },
+  roomTabText: {
+    fontSize: 13, color: colors.textSecondary,
+  },
+  roomTabTextActive: {
+    color: colors.accent, fontWeight: '600',
+  },
+  noRoomsText: {
+    fontSize: 13, color: colors.textMuted, paddingHorizontal: 8, paddingVertical: 6,
+  },
   // Chat
   chatArea: { flex: 1 },
   messagesList: { padding: 16, paddingBottom: 8 },
@@ -267,41 +386,20 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginRight: 8, marginTop: 4,
   },
-  messageBubble: {
-    borderRadius: 20, padding: 14, maxWidth: '100%',
-  },
-  userBubble: {
-    backgroundColor: colors.accent,
-    borderBottomRightRadius: 4,
-  },
-  botBubble: {
-    ...glassmorphism.card,
-    borderBottomLeftRadius: 4,
-  },
+  messageBubble: { borderRadius: 20, padding: 14, maxWidth: '100%' },
+  userBubble: { backgroundColor: colors.accent, borderBottomRightRadius: 4 },
+  botBubble: { ...glassmorphism.card, borderBottomLeftRadius: 4 },
   messageText: { fontSize: 15, lineHeight: 22 },
   userText: { color: '#000' },
   botText: { color: colors.textPrimary },
-  toolCallsText: {
-    fontSize: 10, color: colors.textMuted, marginTop: 6,
-    fontStyle: 'italic',
-  },
-  messageTime: {
-    fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 4, alignSelf: 'flex-end',
-  },
+  toolCallsText: { fontSize: 10, color: colors.textMuted, marginTop: 6, fontStyle: 'italic' },
+  messageTime: { fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 4, alignSelf: 'flex-end' },
   ttsBtn: {
-    position: 'absolute',
-    bottom: -15,
-    right: 5,
-    padding: 6,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 15,
+    position: 'absolute', bottom: -15, right: 5, padding: 6,
+    backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 15,
   },
-  typingBubble: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
-  },
-  typingText: {
-    color: colors.textMuted, fontSize: 13, marginLeft: 8,
-  },
+  typingBubble: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  typingText: { color: colors.textMuted, fontSize: 13, marginLeft: 8 },
   // Empty State
   emptyChat: { alignItems: 'center', padding: 24 },
   emptyAvatar: {
@@ -315,14 +413,8 @@ const styles = StyleSheet.create({
     fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24,
     paddingHorizontal: 20,
   },
-  quickActionGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10,
-  },
-  quickActionBtn: {
-    ...glassmorphism.card,
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: 20,
-  },
+  quickActionGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
+  quickActionBtn: { ...glassmorphism.card, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
   quickActionText: { color: colors.textPrimary, fontSize: 13 },
   // Input
   inputBar: {
@@ -331,20 +423,37 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row', alignItems: 'flex-end',
-    ...glassmorphism.input,
-    paddingLeft: 16, paddingRight: 6, paddingVertical: 6,
+    ...glassmorphism.input, paddingLeft: 16, paddingRight: 6, paddingVertical: 6,
   },
-  textInput: {
-    flex: 1, color: colors.textPrimary, fontSize: 15,
-    maxHeight: 100, paddingVertical: 8,
-  },
+  textInput: { flex: 1, color: colors.textPrimary, fontSize: 15, maxHeight: 100, paddingVertical: 8 },
   sendBtn: {
     width: 38, height: 38, borderRadius: 19,
+    backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginLeft: 8,
+  },
+  sendBtnDisabled: { backgroundColor: colors.surfaceLight },
+  // Rename Modal
+  modalOverlay: {
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  modalContent: {
+    width: '80%', padding: 24, borderRadius: 16,
+    backgroundColor: colors.cardBg || '#1a1a2e',
+    borderWidth: 1, borderColor: colors.divider,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary, marginBottom: 16 },
+  modalInput: {
+    padding: 12, borderRadius: 10, fontSize: 15,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: colors.divider,
+    color: colors.textPrimary, marginBottom: 16,
+  },
+  modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  modalBtnCancel: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  modalBtnCancelText: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
+  modalBtnSave: {
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10,
     backgroundColor: colors.accent,
-    alignItems: 'center', justifyContent: 'center',
-    marginLeft: 8,
   },
-  sendBtnDisabled: {
-    backgroundColor: colors.surfaceLight,
-  },
+  modalBtnSaveText: { color: '#000', fontSize: 14, fontWeight: '600' },
 });
