@@ -179,6 +179,7 @@ export default function OnboardingPage() {
                         )}
 
                         {role === 'ADVISOR' && (
+                            <>
                             <div style={styles.inputGroup}>
                                 <label style={styles.label}>{t('onboarding.arnNumber')}</label>
                                 <input
@@ -190,7 +191,6 @@ export default function OnboardingPage() {
                                 />
                                 <div style={styles.helpText}>{t('onboarding.arnHelp')}</div>
                             </div>
-                            <>
                                 <h3 style={styles.sectionTitle}>Basic Identity & Contact</h3>
                                 <div style={styles.inputGroup}>
                                     <label style={styles.label}>Professional Email</label>
