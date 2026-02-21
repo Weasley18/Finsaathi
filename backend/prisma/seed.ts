@@ -113,6 +113,7 @@ async function seed() {
     await prisma.partnerMatch.deleteMany();
     await prisma.partnerProduct.deleteMany();
     await prisma.advisorClient.deleteMany();
+    await prisma.advisorProfile.deleteMany();
     await prisma.advisorNote.deleteMany();
     await prisma.notification.deleteMany();
     await prisma.activityTracker.deleteMany();
@@ -170,6 +171,7 @@ async function seed() {
             role: Role.ADVISOR,
             approvalStatus: ApprovalStatus.APPROVED,
             tier: AdvisorTier.PREMIUM,
+            businessId: 'ARN-112345',
             language: 'en',
             isActive: true,
             points: 500,
@@ -186,6 +188,7 @@ async function seed() {
             role: Role.ADVISOR,
             approvalStatus: ApprovalStatus.APPROVED,
             tier: AdvisorTier.FREE,
+            businessId: 'ARN-998877',
             language: 'ta',
             isActive: true,
             points: 200,
@@ -209,6 +212,22 @@ async function seed() {
             isActive: true,
             points: 0,
             streakDays: 0,
+            // Partner onboarding fields
+            legalDocType: 'CIN',
+            legalDocNumber: 'U74999MH2020PTC345678',
+            registeredAddr: '301, FinServe Tower, BKC, Mumbai, Maharashtra 400051',
+            regulatoryRegNumber: 'NBFC-N-07.00123',
+            complianceOfficerEmail: 'compliance@finservecapital.in',
+            complianceOfficerPhone: '+919876500001',
+            technicalContactEmail: 'tech@finservecapital.in',
+            technicalContactPhone: '+919876500002',
+            webhookUrl: 'https://api.finservecapital.in/webhooks/finsaathi',
+            oauthCompatible: true,
+            digitalAcceptanceOfTerms: true,
+            hasSignedDataProcessAgreement: true,
+            hasSignedNoPIIAccess: true,
+            hasSignedNoDataResale: true,
+            hasSignedBreachReport: true,
         },
     });
     console.log(`✅ Partner 1: ${partner1.name} (${partner1.phone})`);
@@ -224,6 +243,22 @@ async function seed() {
             isActive: true,
             points: 0,
             streakDays: 0,
+            // Partner onboarding fields
+            legalDocType: 'NGO_REGISTRATION',
+            legalDocNumber: 'NGO-DL-2019-0987654',
+            registeredAddr: '12, Microfinance Bhawan, Nehru Place, New Delhi 110019',
+            regulatoryRegNumber: 'NGO-DARPAN-DL/2019/0234567',
+            complianceOfficerEmail: 'compliance@microlendindia.org',
+            complianceOfficerPhone: '+919876600001',
+            technicalContactEmail: 'devops@microlendindia.org',
+            technicalContactPhone: '+919876600002',
+            webhookUrl: 'https://api.microlendindia.org/hooks/finsaathi',
+            oauthCompatible: false,
+            digitalAcceptanceOfTerms: true,
+            hasSignedDataProcessAgreement: true,
+            hasSignedNoPIIAccess: true,
+            hasSignedNoDataResale: true,
+            hasSignedBreachReport: false,
         },
     });
     console.log(`✅ Partner 2: ${partner2.name} (${partner2.phone}) — PENDING approval`);
@@ -239,6 +274,7 @@ async function seed() {
             approvalStatus: ApprovalStatus.APPROVED,
             incomeRange: IncomeRange.FROM_50K_TO_1L,
             riskProfile: RiskProfile.MODERATE,
+            areasOfInterest: ['Micro-savings', 'Debt Management'],
             language: 'hi',
             isActive: true,
             points: 320,
@@ -256,6 +292,7 @@ async function seed() {
             approvalStatus: ApprovalStatus.APPROVED,
             incomeRange: IncomeRange.FROM_25K_TO_50K,
             riskProfile: RiskProfile.CONSERVATIVE,
+            areasOfInterest: ['Retirement Planning', 'Micro-savings'],
             language: 'gu',
             isActive: true,
             points: 180,
@@ -273,6 +310,7 @@ async function seed() {
             approvalStatus: ApprovalStatus.APPROVED,
             incomeRange: IncomeRange.ABOVE_1L,
             riskProfile: RiskProfile.AGGRESSIVE,
+            areasOfInterest: ['Gig-Worker Financial Planning', 'Rural Microfinance', 'Debt Management'],
             language: 'en',
             isActive: true,
             points: 750,
@@ -290,6 +328,7 @@ async function seed() {
             approvalStatus: ApprovalStatus.APPROVED,
             incomeRange: IncomeRange.FROM_10K_TO_25K,
             riskProfile: RiskProfile.CONSERVATIVE,
+            areasOfInterest: ['Micro-savings'],
             language: 'bn',
             isActive: true,
             points: 90,
@@ -319,6 +358,78 @@ async function seed() {
     await prisma.advisorClient.create({ data: { advisorId: advisor2.id, clientId: user3.id } });
     // user4 has no advisor
     console.log('\n🔗 Advisor-Client assignments created');
+
+    // ═══════════════════════════════════════════════════════════════
+    // 6b. ADVISOR PROFILES
+    // ═══════════════════════════════════════════════════════════════
+    await prisma.advisorProfile.create({
+        data: {
+            userId: advisor1.id,
+            businessAddress: '504, Wealth Tower, Bandra West, Mumbai 400050',
+            professionalEmail: 'priya.sharma@wealthadvisors.in',
+            sebiCertificateIssueDate: new Date('2022-03-15'),
+            sebiCertificateExpiryDate: new Date('2027-03-14'),
+            baslMembershipId: 'BASL-2022-MH-04567',
+            highestQualification: 'MBA Finance, IIM Ahmedabad, 2018',
+            optionalCertifications: ['NISM-Series-V-A', 'NISM-Series-XVII'],
+            languagesSpoken: ['English', 'Hindi', 'Marathi'],
+            areasOfExpertise: ['Micro-savings', 'Debt Management', 'Retirement Planning'],
+            feeModel: 'FLAT_FEE',
+        },
+    });
+
+    await prisma.advisorProfile.create({
+        data: {
+            userId: advisor2.id,
+            businessAddress: '22, Financial District, Anna Salai, Chennai 600002',
+            professionalEmail: 'arjun.nair@nairfinance.co.in',
+            sebiCertificateIssueDate: new Date('2023-07-01'),
+            sebiCertificateExpiryDate: new Date('2028-06-30'),
+            baslMembershipId: 'BASL-2023-TN-01234',
+            highestQualification: 'B.Com, University of Madras, 2020',
+            optionalCertifications: ['NISM-Series-XV'],
+            languagesSpoken: ['English', 'Tamil'],
+            areasOfExpertise: ['Gig-Worker Financial Planning', 'Rural Microfinance'],
+            feeModel: 'NGO_SUBSIDIZED',
+        },
+    });
+    console.log('🧑‍💼 Advisor profiles created');
+
+    // ═══════════════════════════════════════════════════════════════
+    // 6c. ADVISOR ONBOARDING DOCUMENTS
+    // ═══════════════════════════════════════════════════════════════
+    const docTypes = ['sebi_certificate', 'pan', 'nism_xa', 'nism_xb'] as const;
+    const docLabels: Record<string, string> = {
+        sebi_certificate: 'SEBI_Registration_Certificate.pdf',
+        pan: 'PAN_Card.pdf',
+        nism_xa: 'NISM_Series_X-A.pdf',
+        nism_xb: 'NISM_Series_X-B.pdf',
+    };
+
+    // Advisor 1 — all docs VERIFIED (approved advisor)
+    await prisma.document.createMany({
+        data: docTypes.map((type) => ({
+            userId: advisor1.id,
+            type,
+            fileName: docLabels[type],
+            storageKey: `${advisor1.id}/${Date.now()}-${docLabels[type]}`,
+            status: 'VERIFIED' as const,
+            reviewNote: 'Verified by admin during onboarding approval',
+        })),
+    });
+
+    // Advisor 2 — all docs VERIFIED (approved advisor)
+    await prisma.document.createMany({
+        data: docTypes.map((type) => ({
+            userId: advisor2.id,
+            type,
+            fileName: docLabels[type],
+            storageKey: `${advisor2.id}/${Date.now()}-${docLabels[type]}`,
+            status: 'VERIFIED' as const,
+            reviewNote: 'Verified by admin during onboarding approval',
+        })),
+    });
+    console.log('📄 Advisor onboarding documents created');
 
     // ═══════════════════════════════════════════════════════════════
     // 7. ADVISOR NOTES

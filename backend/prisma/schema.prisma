@@ -81,6 +81,12 @@ enum DifficultyLevel {
   ADVANCED
 }
 
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
 // ─── Models ──────────────────────────────────────────────────────
 
 model User {
@@ -91,6 +97,7 @@ model User {
   incomeRange    IncomeRange?
   riskProfile    RiskProfile?
   role           Role           @default(END_USER)
+  approvalStatus ApprovalStatus @default(APPROVED)
   tier           AdvisorTier? // Only for ADVISOR role
   businessId     String?      // Stores SEBI ARN or GSTIN for Partners
   avatarUrl      String?
@@ -307,17 +314,20 @@ model ChatMessage {
 }
 
 model Document {
-  id            String   @id @default(cuid())
+  id            String         @id @default(cuid())
   userId        String
-  type          String   // 'pan', 'aadhaar', 'salary_slip', 'bank_statement', 'insurance'
+  type          String         // 'pan', 'sebi_certificate', 'nism_xa', 'nism_xb', 'aadhaar', 'salary_slip', 'bank_statement', 'insurance'
   fileName      String
   storageKey    String
-  extractedData String?  // JSON string of OCR-extracted fields
-  uploadedAt    DateTime @default(now())
+  status        DocumentStatus @default(PENDING)
+  reviewNote    String?        // Admin review note on verification
+  extractedData String?        // JSON string of OCR-extracted fields
+  uploadedAt    DateTime       @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([userId, type])
   @@map("documents")
 }
 

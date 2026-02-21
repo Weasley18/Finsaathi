@@ -74,13 +74,12 @@ export const api = {
     uploadDocument: async (file, type) => {
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('type', type);
 
         const headers = {
             ...(token && { Authorization: `Bearer ${token}` }),
         };
 
-        const res = await fetch(`${BASE_URL}/documents/upload`, {
+        const res = await fetch(`${BASE_URL}/documents/upload?type=${encodeURIComponent(type)}`, {
             method: 'POST',
             headers,
             body: formData, // Do not set Content-Type header manually, let fetch handle the boundary

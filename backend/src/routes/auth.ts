@@ -158,6 +158,7 @@ export async function authRoutes(app: FastifyInstance) {
             data: {
                 ...data,
                 ...(role && { role }),
+                ...(businessId && { businessId }),
                 ...(areasOfInterest && { areasOfInterest }),
                 approvalStatus,
             },

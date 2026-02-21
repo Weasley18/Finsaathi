@@ -48,6 +48,7 @@ export async function documentRoutes(app: FastifyInstance) {
                 id: document.id,
                 fileName: document.fileName,
                 type: document.type,
+                status: document.status,
                 uploadedAt: document.uploadedAt,
                 chunksIndexed,
             },
@@ -65,12 +66,63 @@ export async function documentRoutes(app: FastifyInstance) {
                 id: true,
                 type: true,
                 fileName: true,
+                status: true,
+                reviewNote: true,
                 extractedData: true,
                 uploadedAt: true,
             },
         });
 
         return reply.send({ documents });
+    });
+
+    // ─── List Documents for a specific user (Admin) ──────────────
+    app.get('/user/:userId', async (request: any, reply) => {
+        if (request.user.role !== 'ADMIN') {
+            return reply.status(403).send({ error: 'Admin access required' });
+        }
+
+        const { userId } = request.params as { userId: string };
+
+        const documents = await prisma.document.findMany({
+            where: { userId },
+            orderBy: { uploadedAt: 'desc' },
+            select: {
+                id: true,
+                type: true,
+                fileName: true,
+                status: true,
+                reviewNote: true,
+                extractedData: true,
+                uploadedAt: true,
+            },
+        });
+
+        return reply.send({ documents });
+    });
+
+    // ─── Verify/Reject Document (Admin) ──────────────────────────
+    app.put('/:id/verify', async (request: any, reply) => {
+        if (request.user.role !== 'ADMIN') {
+            return reply.status(403).send({ error: 'Admin access required' });
+        }
+
+        const { id } = request.params as { id: string };
+        const { status, reviewNote } = request.body as { status: 'VERIFIED' | 'REJECTED'; reviewNote?: string };
+
+        if (!['VERIFIED', 'REJECTED'].includes(status)) {
+            return reply.status(400).send({ error: 'Status must be VERIFIED or REJECTED' });
+        }
+
+        const doc = await prisma.document.findUnique({ where: { id } });
+        if (!doc) return reply.status(404).send({ error: 'Document not found' });
+
+        const updated = await prisma.document.update({
+            where: { id },
+            data: { status, reviewNote },
+        });
+
+        return reply.send({ success: true, document: updated });
     });
 
     // ─── Delete Document ─────────────────────────────────────────
