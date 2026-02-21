@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Dimensions, Alert, ScrollView, KeyboardAvoidingView, Platform, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, Check, ShoppingBag, Car, Lightbulb, Heart, BookOpen, Film, CreditCard, Coffee, Mic } from 'lucide-react-native';
+import { X, Check, ShoppingBag, Car, Lightbulb, Heart, BookOpen, Film, CreditCard, Coffee, Mic, MessageSquareText } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import useFinanceStore from '../store/financeStore';
 import { colors, gradients, glassmorphism } from '../theme';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -21,6 +22,7 @@ const CATEGORIES = [
 ];
 
 export default function ExpenseEntry({ navigation }) {
+  const { t } = useTranslation();
   const [amount, setAmount] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [description, setDescription] = useState('');
@@ -30,6 +32,11 @@ export default function ExpenseEntry({ navigation }) {
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [voiceText, setVoiceText] = useState('');
   const [parsingVoice, setParsingVoice] = useState(false);
+
+  // SMS Parsing state
+  const [showSmsModal, setShowSmsModal] = useState(false);
+  const [smsText, setSmsText] = useState('');
+  const [parsingSms, setParsingSms] = useState(false);
 
   const { addTransaction } = useFinanceStore();
 
@@ -59,6 +66,35 @@ export default function ExpenseEntry({ navigation }) {
       Alert.alert('Error', 'Failed to parse voice input.');
     } finally {
       setParsingVoice(false);
+    }
+  };
+
+  const handleSmsSubmit = async () => {
+    if (!smsText.trim()) return;
+    setParsingSms(true);
+    try {
+      const api = require('../services/api').default;
+      const res = await api.post('/transactions/parse-sms', { text: smsText });
+
+      if (res.data && res.data.success && res.data.parsedData) {
+        const { amount: aiAmount, category: aiCat, description: aiDesc } = res.data.parsedData;
+
+        if (aiAmount) setAmount(aiAmount.toString());
+        if (aiDesc) setDescription(aiDesc);
+
+        const matchedCat = CATEGORIES.find(c => c.name.toLowerCase() === (aiCat || '').toLowerCase());
+        if (matchedCat) setSelectedCategory(matchedCat.name);
+        else setSelectedCategory(CATEGORIES[0].name);
+
+        setShowSmsModal(false);
+        setSmsText('');
+        Alert.alert('Success ✅', 'Transaction details extracted from SMS!');
+      }
+    } catch (e) {
+      console.log(e);
+      Alert.alert('Error', "Couldn't extract details from this SMS format.");
+    } finally {
+      setParsingSms(false);
     }
   };
 
@@ -108,16 +144,21 @@ export default function ExpenseEntry({ navigation }) {
           <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
             <X size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Expense</Text>
-          <TouchableOpacity onPress={() => setShowVoiceModal(true)} style={styles.micBtn}>
-            <Mic size={20} color={colors.brightGold} />
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('expenses.addExpense')}</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => setShowSmsModal(true)} style={[styles.micBtn, { marginRight: 8 }]}>
+              <MessageSquareText size={20} color={colors.brightGold} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowVoiceModal(true)} style={styles.micBtn}>
+              <Mic size={20} color={colors.brightGold} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Amount Input */}
           <View style={styles.amountSection}>
-            <Text style={styles.amountLabel}>AMOUNT</Text>
+            <Text style={styles.amountLabel}>{t('expenses.amount')}</Text>
             <View style={styles.amountRow}>
               <Text style={styles.rupeeSymbol}>₹</Text>
               <TextInput
@@ -133,7 +174,7 @@ export default function ExpenseEntry({ navigation }) {
           </View>
 
           {/* Category Selection */}
-          <Text style={styles.sectionLabel}>CATEGORY</Text>
+          <Text style={styles.sectionLabel}>{t('expenses.category').toUpperCase()}</Text>
           <View style={styles.categoryGrid}>
             {CATEGORIES.map((cat) => {
               const IconComponent = cat.icon;
@@ -156,7 +197,7 @@ export default function ExpenseEntry({ navigation }) {
                     <IconComponent size={22} color={isSelected ? '#fff' : cat.color} />
                   </View>
                   <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
-                    {cat.name}
+                    {t('expenses.categories.' + cat.name.toLowerCase())}
                   </Text>
                   {isSelected && (
                     <View style={styles.selectedBadge}>
@@ -169,7 +210,7 @@ export default function ExpenseEntry({ navigation }) {
           </View>
 
           {/* Description */}
-          <Text style={styles.sectionLabel}>NOTE (OPTIONAL)</Text>
+          <Text style={styles.sectionLabel}>{t('expenses.noteOptional')}</Text>
           <View style={styles.descriptionContainer}>
             <TextInput
               style={styles.descriptionInput}
@@ -195,7 +236,7 @@ export default function ExpenseEntry({ navigation }) {
               style={styles.saveBtnGradient}
             >
               <Text style={styles.saveBtnText}>
-                {saving ? 'Saving...' : amount ? `Save ₹${parseFloat(amount).toLocaleString('en-IN')} Expense` : 'Save Expense'}
+                {saving ? t('common.loading') : amount ? `${t('common.save')} ₹${parseFloat(amount).toLocaleString('en-IN')} ${t('expenses.category')}` : t('expenses.saveExpense')}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -240,6 +281,45 @@ export default function ExpenseEntry({ navigation }) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* SMS Parser Modal */}
+      <Modal visible={showSmsModal} animationType="slide" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalBg}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Paste Bank SMS 💬</Text>
+              <TouchableOpacity onPress={() => setShowSmsModal(false)}>
+                <X size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>Paste your bank SMS here to auto-fill the form instantly.</Text>
+
+            <TextInput
+              style={styles.voiceInput}
+              placeholder='e.g., "Rs.500.00 debited from A/c XX1234 on 21-Feb-26 at Swiggy"'
+              placeholderTextColor={colors.textMuted}
+              value={smsText}
+              onChangeText={setSmsText}
+              multiline
+              autoFocus
+            />
+
+            <TouchableOpacity
+              style={[styles.parseBtn, (!smsText || parsingSms) && styles.parseBtnDisabled]}
+              onPress={handleSmsSubmit}
+              disabled={!smsText || parsingSms}
+            >
+              <LinearGradient colors={gradients.primary} style={styles.parseBtnGradient}>
+                {parsingSms ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.parseBtnText}>Extract Details ✨</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -254,6 +334,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.divider,
   },
   closeBtn: { padding: 8 },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   micBtn: {
     padding: 8,
     backgroundColor: 'rgba(212, 175, 55, 0.15)',

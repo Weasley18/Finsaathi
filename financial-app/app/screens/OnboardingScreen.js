@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { User, Briefcase, Building2, ArrowRight } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import useAuthStore from '../store/authStore';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -23,6 +24,7 @@ const GOALS = [
 ];
 
 export default function OnboardingScreen({ navigation }) {
+    const { t } = useTranslation();
     const [step, setStep] = useState(1); // 1: Role, 2: Details
     const [role, setRole] = useState(null); // 'END_USER', 'ADVISOR', 'PARTNER'
     const [name, setName] = useState('');
@@ -122,7 +124,7 @@ export default function OnboardingScreen({ navigation }) {
                 disabled={!role}
                 onPress={handleNextStep}
             >
-                <Text style={styles.mainBtnText}>Continue</Text>
+                <Text style={styles.mainBtnText}>{t('common.continue')}</Text>
                 <ArrowRight size={20} color={role ? "black" : "#666"} />
             </TouchableOpacity>
         </View>

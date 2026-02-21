@@ -1,8 +1,8 @@
 {
     "compilerOptions": {
         "target": "ES2022",
-        "module": "ESNext",
-        "moduleResolution": "bundler",
+        "module": "CommonJS",
+        "moduleResolution": "Node",
         "lib": [
             "ES2022"
         ],
@@ -24,8 +24,7 @@
         }
     },
     "include": [
-        "src/**/*",
-        "prisma/seed.ts"
+        "src/**/*"
     ],
     "exclude": [
         "node_modules",

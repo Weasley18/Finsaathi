@@ -2,13 +2,17 @@ import React, { useRef, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Send, Sparkles, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Send, Sparkles, Trash2, Volume2, Square } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as Speech from 'expo-speech';
 import useFinanceStore from '../store/financeStore';
 import { colors, gradients, glassmorphism } from '../theme';
+import { useTranslation } from 'react-i18next';
 
 export default function AIChat({ navigation }) {
+  const { t, i18n } = useTranslation();
   const [input, setInput] = useState('');
+  const [speakingMsgId, setSpeakingMsgId] = useState(null);
   const flatListRef = useRef(null);
   const { chatMessages, chatLoading, fetchChatHistory, sendChatMessage, clearChat } = useFinanceStore();
 
@@ -33,6 +37,40 @@ export default function AIChat({ navigation }) {
       console.error('Chat error:', error);
     }
   };
+
+  const handleSpeak = async (messageId, text) => {
+    if (speakingMsgId === messageId) {
+      // Stop speaking
+      await Speech.stop();
+      setSpeakingMsgId(null);
+    } else {
+      // Stop anything currently speaking first
+      await Speech.stop();
+      setSpeakingMsgId(messageId);
+
+      const cleanText = text.replace(/[*_~`]/g, ''); // Strip basic markdown bounds
+      const ttsLangMap = {
+        en: 'en-IN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN',
+        bn: 'bn-IN', mr: 'mr-IN', gu: 'gu-IN', kn: 'kn-IN',
+        ml: 'ml-IN', pa: 'pa-IN', or: 'or-IN', as: 'as-IN',
+      };
+      Speech.speak(cleanText, {
+        language: ttsLangMap[i18n.language] || 'en-IN',
+        pitch: 1.0,
+        rate: 1.0,
+        onDone: () => setSpeakingMsgId(null),
+        onStopped: () => setSpeakingMsgId(null),
+        onError: () => setSpeakingMsgId(null),
+      });
+    }
+  };
+
+  // Stop speaking when user exits screen
+  useEffect(() => {
+    return () => {
+      Speech.stop();
+    };
+  }, []);
 
   const quickActions = [
     { label: '📊 How am I doing?', query: 'Give me an overview of my financial health' },
@@ -66,6 +104,19 @@ export default function AIChat({ navigation }) {
           <Text style={styles.messageTime}>
             {new Date(item.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
           </Text>
+
+          {!isUser && (
+            <TouchableOpacity
+              style={styles.ttsBtn}
+              onPress={() => handleSpeak(item.id, item.content)}
+            >
+              {speakingMsgId === item.id ? (
+                <Square size={14} color={colors.accent} fill={colors.accent} />
+              ) : (
+                <Volume2 size={16} color={colors.textMuted} />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -76,7 +127,7 @@ export default function AIChat({ navigation }) {
       <View style={styles.emptyAvatar}>
         <Sparkles size={40} color={colors.brightGold} />
       </View>
-      <Text style={styles.emptyTitle}>FinSaathi AI Advisor</Text>
+      <Text style={styles.emptyTitle}>{t('chat.title')}</Text>
       <Text style={styles.emptySubtitle}>
         I can help with budgets, investments, savings goals, government schemes, and more!
       </Text>
@@ -113,8 +164,8 @@ export default function AIChat({ navigation }) {
             <Sparkles size={16} color={colors.accentLight} />
           </View>
           <View>
-            <Text style={styles.headerTitle}>FinSaathi Advisor</Text>
-            <Text style={styles.headerSubtitle}>Online • Concierge</Text>
+            <Text style={styles.headerTitle}>{t('chat.title')}</Text>
+            <Text style={styles.headerSubtitle}>{t('chat.online')}</Text>
           </View>
         </View>
         <TouchableOpacity onPress={clearChat} style={styles.clearBtn}>
@@ -149,7 +200,7 @@ export default function AIChat({ navigation }) {
             </View>
             <View style={[styles.messageBubble, styles.botBubble, styles.typingBubble]}>
               <ActivityIndicator size="small" color={colors.accent} />
-              <Text style={styles.typingText}>Thinking...</Text>
+              <Text style={styles.typingText}>{t('chat.thinking')}</Text>
             </View>
           </View>
         )}
@@ -159,7 +210,7 @@ export default function AIChat({ navigation }) {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.textInput}
-              placeholder="Type a message..."
+              placeholder={t('chat.placeholder')}
               placeholderTextColor={colors.textMuted}
               value={input}
               onChangeText={setInput}
@@ -236,6 +287,14 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 4, alignSelf: 'flex-end',
+  },
+  ttsBtn: {
+    position: 'absolute',
+    bottom: -15,
+    right: 5,
+    padding: 6,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 15,
   },
   typingBubble: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 10,

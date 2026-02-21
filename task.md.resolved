@@ -1,0 +1,21 @@
+# Adding Advisor Signup Fields and Profile Updates
+
+## Backend Updates
+- [/] Add `AdvisorProfile` model to [backend/prisma/schema.prisma](file:///c:/Users/aadit/OneDrive/Desktop/mini_project/hackathon/Finsaathi/backend/prisma/schema.prisma).
+- [/] Add `areasOfInterest` (String[]) to `User` model in [schema.prisma](file:///c:/Users/aadit/OneDrive/Desktop/mini_project/hackathon/Finsaathi/backend/prisma/schema.prisma).
+- [ ] Apply prisma schema changes (`npx prisma db push` and `npx prisma generate`).
+- [ ] Update `profileSchema` zod validation in [backend/src/routes/auth.ts](file:///c:/Users/aadit/OneDrive/Desktop/mini_project/hackathon/Finsaathi/backend/src/routes/auth.ts).
+- [ ] Update `/complete-profile` endpoint in [backend/src/routes/auth.ts](file:///c:/Users/aadit/OneDrive/Desktop/mini_project/hackathon/Finsaathi/backend/src/routes/auth.ts) to handle `AdvisorProfile` creation and `areasOfInterest` for users.
+- [ ] Update Advisor listing API to filter/sort by overlapping `areasOfExpertise` and `areasOfInterest`.
+
+## Frontend Updates (web-app/src/pages/OnboardingPage.jsx)
+- [ ] Add **Basic Identity & Contact Info** section (Professional Email, Business Address, Profile Picture).
+- [ ] Add **Regulatory & Compliance** section (SEBI Reg Number, Certificate Validity, BASL Membership ID).
+- [ ] Add **Educational & Certification** section (Highest Education, Multi-select for optional certifications; Mandatory certs omitted from list).
+- [ ] Add **Required Document Uploads** section (implementing file inputs uploading sequentially to the `/upload` backend route).
+- [ ] Add **Platform-Specific Profiling** section (Languages Spoken, Areas of Expertise [Dropdown], Fee Model [Dropdown]).
+- [ ] Add **User Interests** Multi-select Dropdown to `END_USER` onboarding flow.
+
+## Verification
+- [ ] Manually test ADVISOR signup flow from the Web App UI.
+- [ ] Verify that the `AdvisorProfile` and `Document` records are successfully created in the database.

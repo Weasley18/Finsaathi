@@ -112,7 +112,7 @@ export function requireTier(minTier: Tier) {
         // In a real app, we might put tier in JWT to avoid this DB call
         // For now, assuming tier is in JWT payload for simplicity, or we fetch it.
         // Let's assume we need to fetch it to be safe.
-        const { prisma } = await import('../server.js');
+        const { prisma } = await import('../server');
         const dbUser = await prisma.user.findUnique({
             where: { id: user.userId },
             select: { tier: true }

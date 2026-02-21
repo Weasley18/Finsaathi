@@ -1,11 +1,42 @@
-import { chatWithOllama } from './ollama.js';
+import { createHash } from 'crypto';
+import { chatWithOllama } from './ollama';
 
 // ─── Multilingual Translation Service ────────────────────────────
-// Uses Ollama LLM to translate between Indian languages and English.
-// For hackathon: Uses LLM-based translation. In production, swap
-// with IndicTrans2 or Google Translate API for better accuracy.
+// Uses IndicTrans2 (AI4Bharat) via Hugging Face Inference API for
+// high-quality Indic language translation. Supports 12 languages.
 
-const SUPPORTED_LANGUAGES: Record<string, string> = {
+const HF_API_KEY = process.env.HUGGINGFACE_API_KEY || '';
+const HF_INDIC_TO_EN = 'https://api-inference.huggingface.co/models/ai4bharat/indictrans2-indic-en-1B';
+const HF_EN_TO_INDIC = 'https://api-inference.huggingface.co/models/ai4bharat/indictrans2-en-indic-1B';
+
+// ─── Redis-based Translation Cache ──────────────────────────────
+import Redis from 'ioredis';
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const CACHE_TTL = 86400; // 24 hours
+
+async function getCachedTranslation(key: string): Promise<string | null> {
+    try {
+        return await redis.get(key);
+    } catch {
+        return null;
+    }
+}
+
+async function setCachedTranslation(key: string, value: string): Promise<void> {
+    try {
+        await redis.set(key, value, 'EX', CACHE_TTL);
+    } catch (err) {
+        console.error('[Translation Cache] Failed to set:', err);
+    }
+}
+
+function translationCacheKey(sourceLang: string, targetLang: string, text: string): string {
+    const hash = createHash('sha256').update(text).digest('hex').substring(0, 16);
+    return `trans:${sourceLang}:${targetLang}:${hash}`;
+}
+
+// ─── Supported Languages ────────────────────────────────────────
+export const SUPPORTED_LANGUAGES: Record<string, string> = {
     en: 'English',
     hi: 'Hindi',
     ta: 'Tamil',
@@ -17,6 +48,23 @@ const SUPPORTED_LANGUAGES: Record<string, string> = {
     ml: 'Malayalam',
     pa: 'Punjabi',
     or: 'Odia',
+    as: 'Assamese',
+};
+
+// IndicTrans2 uses BCP-47 / Flores-200 language codes
+const LANG_CODE_MAP: Record<string, string> = {
+    en: 'eng_Latn',
+    hi: 'hin_Deva',
+    ta: 'tam_Taml',
+    te: 'tel_Telu',
+    bn: 'ben_Beng',
+    mr: 'mar_Deva',
+    gu: 'guj_Gujr',
+    kn: 'kan_Knda',
+    ml: 'mal_Mlym',
+    pa: 'pan_Guru',
+    or: 'ory_Orya',
+    as: 'asm_Beng',
 };
 
 // ─── Language Detection ──────────────────────────────────────────
@@ -28,7 +76,7 @@ export function detectLanguage(text: string): string {
     if (/[\u0B80-\u0BFF]/.test(text)) return 'ta';
     // Telugu: U+0C00-U+0C7F
     if (/[\u0C00-\u0C7F]/.test(text)) return 'te';
-    // Bengali: U+0980-U+09FF
+    // Bengali/Assamese: U+0980-U+09FF
     if (/[\u0980-\u09FF]/.test(text)) return 'bn';
     // Gujarati: U+0A80-U+0AFF
     if (/[\u0A80-\u0AFF]/.test(text)) return 'gu';
@@ -48,26 +96,70 @@ export function detectLanguage(text: string): string {
     return 'en';
 }
 
+// ─── IndicTrans2 HuggingFace API Call ────────────────────────────
+async function callIndicTrans2(
+    text: string,
+    sourceLang: string,
+    targetLang: string,
+    apiUrl: string
+): Promise<string> {
+    const srcCode = LANG_CODE_MAP[sourceLang];
+    const tgtCode = LANG_CODE_MAP[targetLang];
+
+    if (!srcCode || !tgtCode) {
+        console.warn(`[Translation] Unsupported lang pair: ${sourceLang} → ${targetLang}`);
+        return text;
+    }
+
+    const payload = {
+        inputs: text,
+        parameters: {
+            src_lang: srcCode,
+            tgt_lang: tgtCode,
+        },
+    };
+
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${HF_API_KEY}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`HF API error ${response.status}: ${errBody}`);
+    }
+
+    const result = await response.json();
+
+    // HuggingFace returns [{ translation_text: "..." }] or [{ generated_text: "..." }]
+    if (Array.isArray(result) && result.length > 0) {
+        return result[0].translation_text || result[0].generated_text || text;
+    }
+
+    return text;
+}
+
 // ─── Translate to English ────────────────────────────────────────
 export async function translateToEnglish(text: string, sourceLang: string): Promise<string> {
     if (sourceLang === 'en') return text;
 
-    const langName = SUPPORTED_LANGUAGES[sourceLang] || 'Hindi';
+    // Check cache
+    const cacheKey = translationCacheKey(sourceLang, 'en', text);
+    const cached = await getCachedTranslation(cacheKey);
+    if (cached) {
+        console.log(`[Translation] Cache hit: ${sourceLang} → en`);
+        return cached;
+    }
 
     try {
-        const systemPrompt = `You are a translator. Translate the following ${langName} text to English. 
-RULES:
-- Output ONLY the English translation, nothing else.
-- Keep financial terms (SIP, EMI, UPI, PPF, NPS, CIBIL) as-is.
-- Keep ₹ amounts as-is.
-- Preserve the intent and emotion of the original message.
-- If the text is already partially in English, translate only the non-English parts.`;
-
-        const response = await chatWithOllama(systemPrompt, [
-            { role: 'user', content: text },
-        ]);
-
-        return response.trim();
+        const translated = await callIndicTrans2(text, sourceLang, 'en', HF_INDIC_TO_EN);
+        await setCachedTranslation(cacheKey, translated);
+        console.log(`[Translation] IndicTrans2: ${sourceLang} → en`);
+        return translated;
     } catch (error) {
         console.error('[Translation] Error translating to English:', error);
         return text; // fallback to original
@@ -78,27 +170,33 @@ RULES:
 export async function translateFromEnglish(text: string, targetLang: string): Promise<string> {
     if (targetLang === 'en') return text;
 
-    const langName = SUPPORTED_LANGUAGES[targetLang] || 'Hindi';
+    // Check cache
+    const cacheKey = translationCacheKey('en', targetLang, text);
+    const cached = await getCachedTranslation(cacheKey);
+    if (cached) {
+        console.log(`[Translation] Cache hit: en → ${targetLang}`);
+        return cached;
+    }
 
     try {
-        const systemPrompt = `You are a translator. Translate the following English text to ${langName}.
-RULES:
-- Output ONLY the ${langName} translation, nothing else.
-- Keep financial terms (SIP, EMI, UPI, PPF, NPS, CIBIL) in English.
-- Keep ₹ amounts in digits (₹5000, not पांच हज़ार रुपये).
-- Use simple, conversational ${langName}. Avoid overly formal or Sanskritized vocabulary.
-- Keep emoji as-is.
-- Preserve markdown formatting (bullet points, bold text).`;
-
-        const response = await chatWithOllama(systemPrompt, [
-            { role: 'user', content: text },
-        ]);
-
-        return response.trim();
+        const translated = await callIndicTrans2(text, 'en', targetLang, HF_EN_TO_INDIC);
+        await setCachedTranslation(cacheKey, translated);
+        console.log(`[Translation] IndicTrans2: en → ${targetLang}`);
+        return translated;
     } catch (error) {
         console.error('[Translation] Error translating from English:', error);
         return text; // fallback to original
     }
+}
+
+// ─── Translate arbitrary text (for middleware use) ───────────────
+export async function translateText(text: string, fromLang: string, toLang: string): Promise<string> {
+    if (fromLang === toLang) return text;
+    if (toLang === 'en') return translateToEnglish(text, fromLang);
+    if (fromLang === 'en') return translateFromEnglish(text, toLang);
+    // For non-English pair, pivot through English
+    const english = await translateToEnglish(text, fromLang);
+    return translateFromEnglish(english, toLang);
 }
 
 // ─── Full Translation Pipeline ───────────────────────────────────

@@ -6,6 +6,7 @@ import { ArrowLeft, Plus, Target, Home, Heart, Shield, Car, Coins, Sparkles, Tre
 import { StatusBar } from 'expo-status-bar';
 import useFinanceStore from '../store/financeStore';
 import { colors, gradients, glassmorphism } from '../theme';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -22,6 +23,7 @@ const GOAL_ICONS = {
 const formatAmount = (amount) => `₹${(amount || 0).toLocaleString('en-IN')}`;
 
 export default function SavingsGoals({ navigation }) {
+  const { t } = useTranslation();
   const { goals, goalsSummary, goalsLoading, fetchGoals, addGoal, contributeToGoal } = useFinanceStore();
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -104,7 +106,7 @@ export default function SavingsGoals({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <ArrowLeft size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Empire</Text>
+        <Text style={styles.headerTitle}>{t('goals.myEmpire')}</Text>
         <TouchableOpacity onPress={() => setShowAddModal(true)} style={styles.addBtn}>
           <Plus size={24} color={colors.brightGold} />
         </TouchableOpacity>
@@ -118,7 +120,7 @@ export default function SavingsGoals({ navigation }) {
         {/* Summary */}
         {goalsSummary && (
           <LinearGradient colors={gradients.surfaceCard} style={[styles.summaryCard, glassmorphism.cardElevated]}>
-            <Text style={styles.summaryLabel}>TOTAL WEALTH ACCUMULATED</Text>
+            <Text style={styles.summaryLabel}>{t('goals.totalWealth').toUpperCase()}</Text>
             <Text style={styles.summaryAmount}>{formatAmount(goalsSummary.totalSaved)}</Text>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
@@ -140,7 +142,7 @@ export default function SavingsGoals({ navigation }) {
         )}
 
         {/* Goals List */}
-        <Text style={styles.sectionTitle}>Treasury Goals</Text>
+        <Text style={styles.sectionTitle}>{t('goals.treasuryGoals')}</Text>
 
         {goalsLoading && goals.length === 0 ? (
           <ActivityIndicator size="large" color={colors.accent} style={{ marginTop: 40 }} />
@@ -170,7 +172,7 @@ export default function SavingsGoals({ navigation }) {
                     </View>
                     <View style={styles.goalInfo}>
                       <Text style={styles.goalName}>{goal.name}</Text>
-                      <Text style={styles.goalTarget}>TARGET: {formatAmount(goal.targetAmount)}</Text>
+                      <Text style={styles.goalTarget}>{t('goals.target')}: {formatAmount(goal.targetAmount)}</Text>
                     </View>
                     {isCompleted ? (
                       <View style={styles.completedBadge}>
@@ -185,7 +187,7 @@ export default function SavingsGoals({ navigation }) {
 
                   <View style={styles.goalAmountRow}>
                     <Text style={styles.goalCurrentAmount}>{formatAmount(goal.currentAmount)}</Text>
-                    <Text style={styles.goalOfTarget}> of {formatAmount(goal.targetAmount)}</Text>
+                    <Text style={styles.goalOfTarget}> {t('goals.of')} {formatAmount(goal.targetAmount)}</Text>
                   </View>
 
                   <View style={styles.progressBarBg}>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../api';
 import { Activity, TrendingUp, TrendingDown, Shield, Target, Wallet, PiggyBank, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 
@@ -18,6 +19,7 @@ const FACTOR_ICONS = {
 };
 
 export default function HealthScorePage() {
+    const { t } = useTranslation();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -59,9 +61,9 @@ export default function HealthScorePage() {
         <div>
             <header className="page-header">
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Activity size={22} color="var(--accent)" /> Financial Health Score
+                    <Activity size={22} color="var(--accent)" /> {t('health.title')}
                 </h2>
-                <p>{d.model || 'AI-Powered Analysis'}</p>
+                <p>{d.model || t('health.subtitle')}</p>
             </header>
 
             {/* Score Circle */}
@@ -89,7 +91,7 @@ export default function HealthScorePage() {
             </div>
 
             {/* Feature Attribution */}
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Score Breakdown</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>{t('health.scoreBreakdown')}</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12, marginBottom: 24 }}>
                 {d.featureAttribution && Object.entries(d.featureAttribution).map(([key, attr]) => {
                     const statusStyle = STATUS_COLORS[attr.status] || STATUS_COLORS.moderate;
@@ -127,7 +129,7 @@ export default function HealthScorePage() {
             {/* Tips */}
             {d.tips?.length > 0 && (
                 <div className="glass-card" style={{ padding: 20 }}>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>💡 Personalized Tips</h3>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>{t('health.personalizedTips')}</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {d.tips.map((tip, i) => (
                             <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', paddingLeft: 12, borderLeft: '2px solid var(--accent)' }}>

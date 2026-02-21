@@ -1,4 +1,5 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // API base URL — change to your backend URL
 const API_BASE_URL = __DEV__
@@ -25,15 +26,19 @@ export const setApiToken = (token) => {
     }
 };
 
-// Request interceptor — add auth token
+// Request interceptor — add auth token and language header
 api.interceptors.request.use(
-    (config) => {
+    async (config) => {
         if (authToken) {
             config.headers.Authorization = `Bearer ${authToken}`;
-            console.log(`[API] Attaching token to ${config.url}`);
-        } else {
-            console.log(`[API] No token for ${config.url}`);
         }
+        // Add language header for server-side translation
+        try {
+            const lang = await AsyncStorage.getItem('finsaathi_language');
+            if (lang && lang !== 'en') {
+                config.headers['X-User-Language'] = lang;
+            }
+        } catch (e) { /* ignore */ }
         return config;
     },
     (error) => Promise.reject(error)

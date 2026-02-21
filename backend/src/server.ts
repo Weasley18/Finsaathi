@@ -14,6 +14,7 @@ import { documentRoutes } from './routes/documents.js';
 import { insightRoutes } from './routes/insights.js';
 import { advisorRoutes } from './routes/advisors.js';
 import { contentRoutes } from './routes/content.js';
+import { analyticsRoutes } from './routes/analytics.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { partnerRoutes } from './routes/partners.js';
 import { adminRoutes } from './routes/admin.js';
@@ -79,7 +80,6 @@ async function main() {
     app.register(notificationRoutes, { prefix: '/api/notifications' });
     app.register(partnerRoutes, { prefix: '/api/partners' });
     app.register(adminRoutes, { prefix: '/api/admin' });
-    app.register(gamificationRoutes, { prefix: '/api/gamification' });
 
     // ─── Health Check ──────────────────────────────────────────
     app.get('/api/health', async () => ({

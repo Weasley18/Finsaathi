@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Check, ArrowRight } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 const CHIP_WIDTH = (width - 72) / 3;
@@ -25,9 +26,12 @@ const languages = [
 
 export default function LanguageSelection({ navigation }) {
   const [selectedLang, setSelectedLang] = useState(null);
+  const { i18n, t } = useTranslation();
 
   const handleContinue = () => {
     if (selectedLang) {
+      // Change app language immediately
+      i18n.changeLanguage(selectedLang);
       navigation.navigate('Login');
     }
   };

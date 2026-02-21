@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import {
   Sparkles, LayoutDashboard, Users, Shield, BarChart3, LogOut, Target,
@@ -6,6 +7,7 @@ import {
   PieChart, Calculator
 } from 'lucide-react';
 import { getAuthToken, setAuthToken, api } from './api';
+import i18n from './i18n';
 import './index.css';
 
 // Pages
@@ -28,6 +30,7 @@ import WaitingRoom from './pages/WaitingRoom';
 import OnboardingPage from './pages/OnboardingPage';
 
 function Sidebar({ user, onLogout }) {
+  const { t } = useTranslation();
   const role = user?.role || 'END_USER';
 
   const navItems = [
@@ -169,7 +172,12 @@ export default function App() {
   useEffect(() => {
     if (getAuthToken()) {
       api.getMe().then(data => {
-        setUser(data.user || data);
+        const u = data.user || data;
+        setUser(u);
+        // Sync i18n language with user preference
+        if (u.language && u.language !== 'en') {
+          i18n.changeLanguage(u.language);
+        }
         setLoading(false);
       }).catch(() => {
         setAuthToken(null);
