@@ -88,6 +88,13 @@ async function main() {
         service: 'finsaathi-backend',
     }));
 
+    // ─── Root Route ────────────────────────────────────────────
+    app.get('/', async () => ({
+        message: 'Welcome to FinSaathi API',
+        status: 'ok',
+        docs: '/api/docs',
+    }));
+
     // ─── Start ─────────────────────────────────────────────────
     const PORT = parseInt(process.env.PORT || '3001');
     const HOST = process.env.HOST || '0.0.0.0';
