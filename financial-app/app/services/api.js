@@ -59,9 +59,38 @@ api.interceptors.response.use(
 // ─── API Helper Methods ────────────────────────────────────────
 
 // Auth
+// Auth
 api.sendOtp = (phone) => api.post('/auth/send-otp', { phone });
 api.verifyOtp = (phone, code) => api.post('/auth/verify-otp', { phone, code });
 api.getMe = () => api.get('/auth/me');
+api.uploadDocument = async (file, type) => {
+    const formData = new FormData();
+    formData.append('file', {
+        uri: file.uri,
+        name: file.name || 'document.pdf',
+        type: file.mimeType || 'application/pdf',
+    });
+
+    // We fetch instead of axios because React Native axios FormData parsing is notoriously buggy and fetch handles bounds better natively
+    let url = `${API_BASE_URL}/documents/upload?type=${encodeURIComponent(type)}`;
+    let headers = {
+        'Content-Type': 'multipart/form-data',
+    };
+    if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+    });
+
+    if (!res.ok) {
+        throw new Error('Upload failed');
+    }
+    return res.json();
+};
 
 // User Data
 api.getDashboard = () => api.get('/users/dashboard');
