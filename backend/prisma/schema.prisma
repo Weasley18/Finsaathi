@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -62,7 +62,6 @@ enum RiskProfile {
   AGGRESSIVE
 }
 
-
 enum AdvisorTier {
   FREE
   PREMIUM
@@ -86,16 +85,18 @@ model User {
   role           Role           @default(END_USER)
   approvalStatus ApprovalStatus @default(APPROVED)
   tier           AdvisorTier? // Only for ADVISOR role
-  businessId     String?      // Stores SEBI ARN or GSTIN for Partners
+  businessId     String? // Stores SEBI ARN or GSTIN for Partners
   avatarUrl      String?
-  isActive      Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  isActive       Boolean        @default(true)
+  healthScore    Float? // ADDED for analytics
+  lastLogin      DateTime? // ADDED for metrics
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   // Gamification
-  points        Int          @default(0)
-  streakDays    Int          @default(0)
-  lastActiveAt  DateTime?
+  points       Int       @default(0)
+  streakDays   Int       @default(0)
+  lastActiveAt DateTime?
 
   // Relations
   transactions     Transaction[]
@@ -106,13 +107,18 @@ model User {
   badges           Badge[]
   activities       ActivityTracker[]
   financialProfile FinancialProfile?
-  
+  // NEW Relations
+  advisorContents  AdvisorContent[] // Content created by this advisor
+  auditLogs        AuditLog[] // Actions by this admin
+  apiLogs          ApiLog[]  @relation("PartnerApiLogs")
+  recommendations  Recommendation[] @relation("UserRecommendations")
+
   // Advisor-Client Relationship
-  advisorClients   AdvisorClient[] @relation("AdvisorClients") // Clients assigned to this advisor
-  assignedAdvisor  AdvisorClient?  @relation("ClientAdvisor")  // The advisor assigned to this client
-  notifications    Notification[]
-  partnerProducts  PartnerProduct[]
-  partnerMatches   PartnerMatch[]
+  advisorClients  AdvisorClient[]  @relation("AdvisorClients") // Clients assigned to this advisor
+  assignedAdvisor AdvisorClient?   @relation("ClientAdvisor") // The advisor assigned to this client
+  notifications   Notification[]
+  partnerProducts PartnerProduct[]
+  partnerMatches  PartnerMatch[]
 
   @@map("users")
 }
@@ -122,8 +128,8 @@ model Notification {
   userId    String
   title     String
   message   String
-  type      String   // 'INFO', 'WARNING', 'SUCCESS', 'ERROR'
-  data      String?  // JSON for extra details
+  type      String // 'INFO', 'WARNING', 'SUCCESS', 'ERROR'
+  data      String? // JSON for extra details
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 
@@ -134,13 +140,13 @@ model Notification {
 }
 
 model AdvisorClient {
-  id        String   @id @default(cuid())
-  advisorId String
-  clientId  String   @unique // One client can have only one advisor for now
+  id         String   @id @default(cuid())
+  advisorId  String
+  clientId   String   @unique // One client can have only one advisor for now
   assignedAt DateTime @default(now())
-  
-  advisor   User     @relation("AdvisorClients", fields: [advisorId], references: [id], onDelete: Cascade)
-  client    User     @relation("ClientAdvisor", fields: [clientId], references: [id], onDelete: Cascade)
+
+  advisor User @relation("AdvisorClients", fields: [advisorId], references: [id], onDelete: Cascade)
+  client  User @relation("ClientAdvisor", fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([advisorId])
   @@map("advisor_clients")
@@ -149,14 +155,14 @@ model AdvisorClient {
 // Advisor notes, advice, and action plans — indexed into ChromaDB
 // to power the Advisor AI Clone (few-shot RAG mimicry)
 model AdvisorNote {
-  id         String   @id @default(cuid())
-  advisorId  String
-  clientId   String?  // null = general advice, set = client-specific
-  content    String   // The advisor's note/advice text
-  category   String?  // 'action_plan', 'observation', 'advice', 'general_tip'
-  isIndexed  Boolean  @default(false) // Whether indexed in ChromaDB
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  advisorId String
+  clientId  String? // null = general advice, set = client-specific
+  content   String // The advisor's note/advice text
+  category  String? // 'action_plan', 'observation', 'advice', 'general_tip'
+  isIndexed Boolean  @default(false) // Whether indexed in ChromaDB
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([advisorId])
   @@index([clientId])
@@ -167,10 +173,10 @@ model Lesson {
   id          String          @id @default(cuid())
   title       String
   description String
-  content     String          // Markdown content
-  icon        String?         // Emoji or URL
+  content     String // Markdown content
+  icon        String? // Emoji or URL
   difficulty  DifficultyLevel @default(BEGINNER)
-  category    String          // Savings, Investing, etc.
+  category    String // Savings, Investing, etc.
   views       Int             @default(0)
   isActive    Boolean         @default(false)
   createdAt   DateTime        @default(now())
@@ -250,8 +256,8 @@ model ChatMessage {
   id        String   @id @default(cuid())
   userId    String
   content   String
-  role      String   // 'user' | 'assistant' | 'system'
-  toolCalls String?  // JSON string of MCP tool calls/results
+  role      String // 'user' | 'assistant' | 'system'
+  toolCalls String? // JSON string of MCP tool calls/results
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -263,10 +269,10 @@ model ChatMessage {
 model Document {
   id            String   @id @default(cuid())
   userId        String
-  type          String   // 'pan', 'aadhaar', 'salary_slip', 'bank_statement', 'insurance'
+  type          String // 'pan', 'aadhaar', 'salary_slip', 'bank_statement', 'insurance'
   fileName      String
   storageKey    String
-  extractedData String?  // JSON string of OCR-extracted fields
+  extractedData String? // JSON string of OCR-extracted fields
   uploadedAt    DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -276,18 +282,18 @@ model Document {
 }
 
 model FinancialProfile {
-  id                String   @id @default(cuid())
-  userId            String   @unique
-  healthScore       Float?   // 0-100
-  savingsRate       Float?   // percentage
-  debtToIncome      Float?   // ratio
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  healthScore         Float? // 0-100
+  savingsRate         Float? // percentage
+  debtToIncome        Float? // ratio
   emergencyFundMonths Float?
   investmentDiversity Float? // 0-1 score
   spendingVolatility  Float?
-  goalAdherence     Float?   // percentage
-  lastCalculated    DateTime @default(now())
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  goalAdherence       Float? // percentage
+  lastCalculated      DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -308,17 +314,33 @@ model OtpCode {
 
 model AuditLog {
   id         String   @id @default(cuid())
-  userId     String?
+  adminId    String // CHANGED: was userId
   action     String
   resource   String
   resourceId String?
-  details    String?  // JSON
+  details    String? // JSON
   ip         String?
   createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+  userId     String?
 
-  @@index([userId])
+  @@index([adminId]) // CHANGED
   @@index([resource, resourceId])
   @@map("audit_logs")
+}
+
+// ─── NEW: Advisor Content Moderation ──────────────────────────────
+model AdvisorContent {
+  id              String   @id @default(cuid())
+  advisorId       String
+  content         String
+  status          String   @default("PENDING")
+  rejectionReason String?
+  createdAt       DateTime @default(now())
+
+  advisor User @relation(fields: [advisorId], references: [id], onDelete: Cascade)
+
+  @@map("advisor_contents")
 }
 
 // ─── Partner Models ──────────────────────────────────────────────
@@ -330,18 +352,18 @@ enum MatchStatus {
 }
 
 model PartnerProduct {
-  id                 String   @id @default(cuid())
-  partnerId          String
-  name               String
-  description        String
-  type               String   // 'microloan', 'insurance', 'savings_account', 'scheme'
-  eligibilityCriteria String?  // JSON: { incomeRange, employmentType, location }
-  interestRate       Float?
-  minAmount          Float?
-  maxAmount          Float?
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  partnerId           String
+  name                String
+  description         String
+  type                String // 'microloan', 'insurance', 'savings_account', 'scheme'
+  eligibilityCriteria String? // JSON: { incomeRange, employmentType, location }
+  interestRate        Float?
+  minAmount           Float?
+  maxAmount           Float?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   partner User           @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   matches PartnerMatch[]
@@ -373,7 +395,7 @@ model Badge {
   userId      String
   name        String
   description String
-  icon        String   // Emoji or URL
+  icon        String // Emoji or URL
   awardedAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -385,7 +407,7 @@ model Badge {
 model ActivityTracker {
   id        String   @id @default(cuid())
   userId    String
-  action    String   // 'LOG_EXPENSE', 'CREATE_GOAL', 'READ_LESSON'
+  action    String // 'LOG_EXPENSE', 'CREATE_GOAL', 'READ_LESSON'
   points    Int      @default(0)
   createdAt DateTime @default(now())
 
@@ -393,4 +415,25 @@ model ActivityTracker {
 
   @@index([userId, action, createdAt])
   @@map("activity_trackers")
+}
+
+model ApiLog {
+  id        String   @id @default(cuid())
+  partnerId String
+  timestamp DateTime @default(now())
+  
+  partner User @relation("PartnerApiLogs", fields: [partnerId], references: [id], onDelete: Cascade)
+  @@index([partnerId])
+  @@map("api_logs")
+}
+
+model Recommendation {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String?
+  createdAt DateTime @default(now())
+  
+  user User @relation("UserRecommendations", fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@map("recommendations")
 }

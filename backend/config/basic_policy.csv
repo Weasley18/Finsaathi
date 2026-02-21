@@ -1,0 +1,3 @@
+p, ADMIN, /admin/*, *
+p, ADVISOR, /users, read
+p, PARTNER, /analytics, read
