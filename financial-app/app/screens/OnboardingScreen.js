@@ -64,8 +64,6 @@ export default function OnboardingScreen({ navigation }) {
 
     // User
     const [dob, setDob] = useState('');
-    const [panNumber, setPanNumber] = useState('');
-    const [userPanDoc, setUserPanDoc] = useState(null);
     const [income, setIncome] = useState('FROM_25K_TO_50K');
     const [goal, setGoal] = useState('MODERATE');
     const [areasOfInterest, setAreasOfInterest] = useState([]);
@@ -155,19 +153,11 @@ export default function OnboardingScreen({ navigation }) {
                 Alert.alert('Age Restriction', 'You must be at least 18 years old to create an account.');
                 return;
             }
-            if (!panNumber || !userPanDoc) {
-                Alert.alert('Required', 'PAN Number and PAN Document are required.');
-                return;
-            }
         }
 
         setSaving(true);
         try {
             // Document uploads logic mapped from web app
-            if (role === 'END_USER' && userPanDoc) {
-                await api.uploadDocument(userPanDoc, 'user_pan');
-            }
-
             if (role === 'ADVISOR') {
                 if (!sebiDoc || !nismXADoc || !nismXBDoc || !panDoc) {
                     Alert.alert('Missing Documents', 'Please upload all mandatory documents for Advisor.');
@@ -201,8 +191,7 @@ export default function OnboardingScreen({ navigation }) {
                     incomeRange: income,
                     riskProfile: goal,
                     areasOfInterest,
-                    dob,
-                    panNumber
+                    dob
                 } : {}),
                 ...((role === 'ADVISOR' || role === 'PARTNER') ? { businessId } : {}),
                 ...(role === 'ADVISOR' ? {
@@ -296,11 +285,6 @@ export default function OnboardingScreen({ navigation }) {
                         <Text style={styles.label}>Date of Birth</Text>
                         <TextInput style={styles.input} value={dob} onChangeText={setDob} placeholder="YYYY-MM-DD" placeholderTextColor="rgba(255,255,255,0.3)" />
                     </View>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>PAN Number</Text>
-                        <TextInput style={styles.input} value={panNumber} onChangeText={v => setPanNumber(v.toUpperCase())} placeholder="ABCDE1234F" placeholderTextColor="rgba(255,255,255,0.3)" maxLength={10} autoCapitalize="characters" />
-                    </View>
-                    <FileUploadBtn label="Upload PAN Card Document" file={userPanDoc} onFileSelect={setUserPanDoc} />
 
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Monthly Income</Text>

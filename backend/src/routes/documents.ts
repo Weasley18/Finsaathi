@@ -6,7 +6,7 @@ import fs from 'fs/promises';
 import path from 'path';
 
 export async function documentRoutes(app: FastifyInstance) {
-    app.addHook('preHandler', app.authenticate as any);
+    app.addHook('preHandler', (app as any).authenticate);
 
     // ─── Upload Document ─────────────────────────────────────────
     app.post('/upload', async (request: any, reply) => {
