@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { User, Briefcase, Building2, ArrowRight } from 'lucide-react';
 import { api } from '../api';
 
 export default function OnboardingPage() {
     const navigate = useNavigate();
+    const { t } = useTranslation();
     const [role, setRole] = useState(null); // 'END_USER', 'ADVISOR', 'PARTNER'
     const [name, setName] = useState('');
     const [businessId, setBusinessId] = useState(''); // ARN or GSTIN
@@ -46,8 +48,8 @@ export default function OnboardingPage() {
     return (
         <div style={styles.container}>
             <div style={styles.card}>
-                <h1 style={styles.title}>Welcome to FinSaathi</h1>
-                <p style={styles.subtitle}>Let's set up your profile. How are you joining us today?</p>
+                <h1 style={styles.title}>{t('onboarding.welcome')}</h1>
+                <p style={styles.subtitle}>{t('onboarding.subtitle')}</p>
 
                 {error && <div style={styles.error}>{error}</div>}
 
@@ -57,8 +59,8 @@ export default function OnboardingPage() {
                         onClick={() => setRole('END_USER')}
                     >
                         <User size={28} color={role === 'END_USER' ? '#d4af35' : 'rgba(255,255,255,0.4)'} />
-                        <div style={styles.roleTitle}>Individual Investor</div>
-                        <div style={styles.roleDesc}>Manage personal finances & savings</div>
+                        <div style={styles.roleTitle}>{t('onboarding.individual')}</div>
+                        <div style={styles.roleDesc}>{t('onboarding.individualDesc')}</div>
                     </button>
 
                     <button
@@ -66,8 +68,8 @@ export default function OnboardingPage() {
                         onClick={() => setRole('ADVISOR')}
                     >
                         <Briefcase size={28} color={role === 'ADVISOR' ? '#d4af35' : 'rgba(255,255,255,0.4)'} />
-                        <div style={styles.roleTitle}>Financial Advisor</div>
-                        <div style={styles.roleDesc}>Manage clients and offer guidance</div>
+                        <div style={styles.roleTitle}>{t('onboarding.advisor')}</div>
+                        <div style={styles.roleDesc}>{t('onboarding.advisorDesc')}</div>
                     </button>
 
                     <button
@@ -75,15 +77,15 @@ export default function OnboardingPage() {
                         onClick={() => setRole('PARTNER')}
                     >
                         <Building2 size={28} color={role === 'PARTNER' ? '#d4af35' : 'rgba(255,255,255,0.4)'} />
-                        <div style={styles.roleTitle}>Institutional Partner</div>
-                        <div style={styles.roleDesc}>Offer financial products & services</div>
+                        <div style={styles.roleTitle}>{t('onboarding.partner')}</div>
+                        <div style={styles.roleDesc}>{t('onboarding.partnerDesc')}</div>
                     </button>
                 </div>
 
                 {role && (
                     <form onSubmit={handleSubmit} style={styles.formSection}>
                         <div style={styles.inputGroup}>
-                            <label style={styles.label}>Full Name {role === 'PARTNER' && '/ Company Name'}</label>
+                            <label style={styles.label}>{t('onboarding.fullName')} {role === 'PARTNER' && `/ ${t('onboarding.companyName')}`}</label>
                             <input
                                 className="input"
                                 value={name}
@@ -96,7 +98,7 @@ export default function OnboardingPage() {
                         {role === 'END_USER' && (
                             <>
                                 <div style={styles.inputGroup}>
-                                    <label style={styles.label}>Monthly Income</label>
+                                    <label style={styles.label}>{t('onboarding.monthlyIncome')}</label>
                                     <select className="input" value={income} onChange={e => setIncome(e.target.value)} style={styles.select}>
                                         <option value="BELOW_10K">&lt; ₹15,000</option>
                                         <option value="FROM_10K_TO_25K">₹15K - ₹30K</option>
@@ -106,7 +108,7 @@ export default function OnboardingPage() {
                                     </select>
                                 </div>
                                 <div style={styles.inputGroup}>
-                                    <label style={styles.label}>Primary Financial Goal</label>
+                                    <label style={styles.label}>{t('onboarding.primaryGoal')}</label>
                                     <select className="input" value={goal} onChange={e => setGoal(e.target.value)} style={styles.select}>
                                         <option value="CONSERVATIVE">Capital Preservation (Safe)</option>
                                         <option value="MODERATE">Balanced Growth</option>
@@ -118,7 +120,7 @@ export default function OnboardingPage() {
 
                         {role === 'ADVISOR' && (
                             <div style={styles.inputGroup}>
-                                <label style={styles.label}>SEBI ARN Number</label>
+                                <label style={styles.label}>{t('onboarding.arnNumber')}</label>
                                 <input
                                     className="input"
                                     value={businessId}
@@ -126,13 +128,13 @@ export default function OnboardingPage() {
                                     placeholder="e.g. ARN-123456"
                                     required
                                 />
-                                <div style={styles.helpText}>Required for fast-track approval</div>
+                                <div style={styles.helpText}>{t('onboarding.arnHelp')}</div>
                             </div>
                         )}
 
                         {role === 'PARTNER' && (
                             <div style={styles.inputGroup}>
-                                <label style={styles.label}>GSTIN</label>
+                                <label style={styles.label}>{t('onboarding.gstin')}</label>
                                 <input
                                     className="input"
                                     value={businessId}
@@ -151,7 +153,7 @@ export default function OnboardingPage() {
                                 opacity: (!name || ((role === 'ADVISOR' || role === 'PARTNER') && !businessId) || loading) ? 0.5 : 1
                             }}
                         >
-                            {loading ? 'Setting up...' : 'Complete Profile'} <ArrowRight size={18} />
+                            {loading ? t('onboarding.settingUp') : t('onboarding.completeProfile')} <ArrowRight size={18} />
                         </button>
                     </form>
                 )}

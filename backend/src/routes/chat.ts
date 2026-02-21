@@ -18,7 +18,8 @@ export async function chatRoutes(app: FastifyInstance) {
         const userId = request.user.userId;
 
         // ─── Multilingual: Detect & Translate ─────────────────────
-        const userLang = request.user.preferredLanguage || undefined;
+        // Language from JWT (set during login), fallback to detection
+        const userLang = request.user.language !== 'en' ? request.user.language : undefined;
         const translationCtx = await preProcessMessage(message, userLang);
         const englishMessage = translationCtx.translatedInput;
 

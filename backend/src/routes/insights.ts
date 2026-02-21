@@ -1,8 +1,11 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server.js';
+import { createTranslationHook } from '../middleware/translate.js';
 
 export async function insightRoutes(app: FastifyInstance) {
     app.addHook('preHandler', app.authenticate as any);
+    // Translate insight text fields to user's language
+    app.addHook('onSend', createTranslationHook({ fields: ['title', 'description', 'tip', 'message', 'category'] }));
 
     // ─── Financial Health Score ──────────────────────────────────
     // ─── Financial Health Score (Weighted Multi-Factor Model) ─────

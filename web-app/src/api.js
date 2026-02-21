@@ -11,9 +11,11 @@ export const setAuthToken = (newToken) => {
 export const getAuthToken = () => token;
 
 async function apiFetch(endpoint, options = {}) {
+    const userLang = localStorage.getItem('finsaathi_language') || 'en';
     const headers = {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...(userLang !== 'en' && { 'X-User-Language': userLang }),
         ...options.headers,
     };
 

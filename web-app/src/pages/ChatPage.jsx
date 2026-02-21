@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../api';
 import { MessageSquare, Send, Sparkles, Bot, User, Trash2 } from 'lucide-react';
 
 export default function ChatPage() {
+    const { t, i18n } = useTranslation();
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -44,17 +46,48 @@ export default function ChatPage() {
         setMessages([]);
     };
 
+    const handleSpeak = (text) => {
+        if (!window.speechSynthesis) return;
+
+        // If currently speaking, stop it
+        if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            return;
+        }
+
+        const cleanText = text.replace(/[*_~`]/g, ''); // strip markdown
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        const ttsLangMap = {
+            en: 'en-IN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN',
+            bn: 'bn-IN', mr: 'mr-IN', gu: 'gu-IN', kn: 'kn-IN',
+            ml: 'ml-IN', pa: 'pa-IN', or: 'or-IN', as: 'as-IN',
+        };
+        utterance.lang = ttsLangMap[i18n.language] || 'en-IN';
+        utterance.rate = 1.0;
+
+        window.speechSynthesis.speak(utterance);
+    };
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
+        };
+    }, []);
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 40px)' }}>
             <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Sparkles size={22} color="var(--accent)" /> FinSaathi AI
+                        <Sparkles size={22} color="var(--accent)" /> {t('chat.title')}
                     </h2>
-                    <p>Your multilingual financial advisor • Supports Hindi, Tamil, Telugu & more</p>
+                    <p>{t('chat.subtitle')}</p>
                 </div>
                 <button className="btn btn-outline" onClick={clearChat} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Trash2 size={14} /> Clear
+                    <Trash2 size={14} /> {t('chat.clear')}
                 </button>
             </header>
 
@@ -69,7 +102,7 @@ export default function ChatPage() {
                         flex: 1, color: 'var(--text-muted)', gap: 12,
                     }}>
                         <Bot size={48} strokeWidth={1} />
-                        <p>Ask me anything about your finances!</p>
+                        <p>{t('chat.emptyPrompt')}</p>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
                             {['How is my financial health?', 'मेरा बजट कितना है?', 'Suggest a SIP plan', 'Which govt schemes can I use?'].map(q => (
                                 <button
@@ -120,6 +153,22 @@ export default function ChatPage() {
                                     🌐 Detected: {msg.detectedLanguage}
                                 </div>
                             )}
+
+                            {/* TTS Button */}
+                            {msg.role === 'assistant' && (
+                                <button
+                                    onClick={() => handleSpeak(msg.content)}
+                                    style={{
+                                        marginTop: 8, background: 'none', border: 'none',
+                                        color: 'var(--text-muted)', cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', gap: 4, fontSize: 12,
+                                        padding: 0
+                                    }}
+                                    title="Read Aloud"
+                                >
+                                    🔊 Read Aloud
+                                </button>
+                            )}
                         </div>
                     </div>
                 ))}
@@ -134,7 +183,7 @@ export default function ChatPage() {
                             <Bot size={16} color="var(--accent)" />
                         </div>
                         <div className="glass-card" style={{ padding: '12px 16px', fontSize: 14 }}>
-                            <span className="typing-dots">Thinking...</span>
+                            <span className="typing-dots">{t('chat.thinking')}</span>
                         </div>
                     </div>
                 )}
@@ -150,7 +199,7 @@ export default function ChatPage() {
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                    placeholder="Type a message in any language..."
+                    placeholder={t('chat.placeholder')}
                     style={{
                         flex: 1, padding: '12px 16px', borderRadius: 14,
                         background: 'var(--card-bg)', border: '1px solid var(--card-border)',
@@ -168,7 +217,7 @@ export default function ChatPage() {
                         color: input.trim() ? '#000' : 'var(--text-muted)', fontWeight: 600,
                     }}
                 >
-                    <Send size={16} /> Send
+                    <Send size={16} /> {t('chat.send')}
                 </button>
             </div>
         </div>

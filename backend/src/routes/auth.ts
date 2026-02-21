@@ -83,9 +83,9 @@ export async function authRoutes(app: FastifyInstance) {
 
         console.log(`[Auth] Verifying OTP for ${phone}. User found: ${!!user}, Role: ${user?.role}`);
 
-        // Generate JWT
+        // Generate JWT (includes language for translation)
         const token = app.jwt.sign(
-            { userId: user.id, phone: user.phone, role: user.role, approvalStatus: user.approvalStatus },
+            { userId: user.id, phone: user.phone, role: user.role, approvalStatus: user.approvalStatus, language: user.language || 'en' },
             { expiresIn: '30d' }
         );
 
@@ -137,9 +137,9 @@ export async function authRoutes(app: FastifyInstance) {
             },
         });
 
-        // Generate new JWT since role/approvalStatus changed
+        // Generate new JWT since role/approvalStatus/language changed
         const token = app.jwt.sign(
-            { userId: user.id, phone: user.phone, role: user.role, approvalStatus: user.approvalStatus },
+            { userId: user.id, phone: user.phone, role: user.role, approvalStatus: user.approvalStatus, language: user.language || 'en' },
             { expiresIn: '30d' }
         );
 

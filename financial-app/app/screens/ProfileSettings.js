@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, User, Globe, LogOut, Shield, Bell, Moon, ChevronRight, Sparkles, Edit3, Check, DollarSign, TrendingUp } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
 import useAuthStore from '../store/authStore';
 import { colors, gradients, glassmorphism } from '../theme';
 
@@ -25,10 +26,20 @@ const LANGUAGES = [
   { code: 'en', label: 'English', flag: '🇬🇧' },
   { code: 'hi', label: 'हिन्दी', flag: '🇮🇳' },
   { code: 'kn', label: 'ಕನ್ನಡ', flag: '🇮🇳' },
+  { code: 'ta', label: 'தமிழ்', flag: '🇮🇳' },
+  { code: 'te', label: 'తెలుగు', flag: '🇮🇳' },
+  { code: 'bn', label: 'বাংলা', flag: '🇮🇳' },
+  { code: 'mr', label: 'मराठी', flag: '🇮🇳' },
+  { code: 'gu', label: 'ગુજરાતી', flag: '🇮🇳' },
+  { code: 'ml', label: 'മലയാളം', flag: '🇮🇳' },
+  { code: 'pa', label: 'ਪੰਜਾਬੀ', flag: '🇮🇳' },
+  { code: 'or', label: 'ଓଡ଼ିଆ', flag: '🇮🇳' },
+  { code: 'as', label: 'অসমীয়া', flag: '🇮🇳' },
 ];
 
 export default function ProfileSettings({ navigation }) {
   const { user, logout, updateProfile } = useAuthStore();
+  const { i18n, t } = useTranslation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
 
@@ -77,6 +88,10 @@ export default function ProfileSettings({ navigation }) {
       if (editRiskProfile) profileData.riskProfile = editRiskProfile;
 
       await updateProfile(profileData);
+      // Switch app locale when language changes
+      if (editLanguage && editLanguage !== i18n.language) {
+        i18n.changeLanguage(editLanguage);
+      }
       setShowEditModal(false);
       Alert.alert('Updated ✅', 'Your profile has been saved.');
     } catch (e) {

@@ -9,6 +9,7 @@ import useFinanceStore from '../store/financeStore';
 import useAuthStore from '../store/authStore';
 import { colors, gradients, glassmorphism } from '../theme';
 import api from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -42,6 +43,7 @@ const CATEGORY_ICONS = {
 };
 
 export default function Dashboard({ navigation }) {
+  const { t } = useTranslation();
   const { dashboard, dashboardLoading, fetchDashboard } = useFinanceStore();
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = React.useState(false);
@@ -98,8 +100,8 @@ export default function Dashboard({ navigation }) {
           {/* Header */}
           <View style={styles.header}>
             <View>
-              <Text style={styles.greeting}>Good {getTimeOfDay()}</Text>
-              <Text style={styles.userName}>Namaste, {userName}</Text>
+              <Text style={styles.greeting}>{t('dashboard.greeting', { timeOfDay: getTimeOfDay() })}</Text>
+              <Text style={styles.userName}>{t('dashboard.namaste', { name: userName })}</Text>
             </View>
 
             {/* Gamification Stats */}
@@ -140,7 +142,7 @@ export default function Dashboard({ navigation }) {
           {/* Spending & Income Cards */}
           <View style={styles.summaryRow}>
             <LinearGradient colors={gradients.surfaceCard} style={[styles.summaryCard, glassmorphism.card]}>
-              <Text style={styles.cardLabel}>Spending</Text>
+              <Text style={styles.cardLabel}>{t('dashboard.spending')}</Text>
               <Text style={styles.summaryAmount}>{formatCurrency(spending)}</Text>
               <View style={styles.trendBadge}>
                 <TrendingDown size={12} color={colors.successLight} />
@@ -149,7 +151,7 @@ export default function Dashboard({ navigation }) {
             </LinearGradient>
 
             <LinearGradient colors={gradients.surfaceCard} style={[styles.summaryCard, glassmorphism.card]}>
-              <Text style={styles.cardLabel}>Income</Text>
+              <Text style={styles.cardLabel}>{t('dashboard.income')}</Text>
               <Text style={[styles.summaryAmount, { color: colors.successLight }]}>{formatCurrency(income)}</Text>
               <View style={styles.trendBadge}>
                 <TrendingUp size={12} color={colors.successLight} />
@@ -162,7 +164,7 @@ export default function Dashboard({ navigation }) {
           <LinearGradient colors={gradients.surfaceCard} style={[styles.healthCard, glassmorphism.card]}>
             <View style={styles.healthRow}>
               <View>
-                <Text style={styles.cardLabel}>Financial Health</Text>
+                <Text style={styles.cardLabel}>{t('dashboard.financialHealth')}</Text>
                 <Text style={styles.healthGrade}>
                   {healthScore >= 80 ? 'Excellent ✨' : healthScore >= 60 ? 'Good 👍' : healthScore >= 40 ? 'Fair 📊' : 'Needs Attention 💪'}
                 </Text>
@@ -182,34 +184,34 @@ export default function Dashboard({ navigation }) {
           </LinearGradient>
 
           {/* Quick Actions */}
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <Text style={styles.sectionTitle}>{t('dashboard.quickActions')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActions}>
             <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('ExpenseEntry')}>
               <LinearGradient colors={[colors.accent, colors.accentLight]} style={styles.actionIcon}>
                 <ShoppingBag size={20} color="#000" />
               </LinearGradient>
-              <Text style={styles.actionLabel}>Add Expense</Text>
+              <Text style={styles.actionLabel}>{t('dashboard.addExpense')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('AIChat')}>
               <View style={[styles.actionIcon, { backgroundColor: colors.surfaceLight }]}>
                 <Zap size={20} color={colors.accent} />
               </View>
-              <Text style={styles.actionLabel}>Ask AI</Text>
+              <Text style={styles.actionLabel}>{t('dashboard.askAI')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('SavingsGoals')}>
               <View style={[styles.actionIcon, { backgroundColor: colors.surfaceLight }]}>
                 <Target size={20} color={colors.accent} />
               </View>
-              <Text style={styles.actionLabel}>Goals</Text>
+              <Text style={styles.actionLabel}>{t('dashboard.goals')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('DiscoverMarketplace')}>
               <View style={[styles.actionIcon, { backgroundColor: colors.surfaceLight }]}>
                 <ShoppingBag size={20} color={colors.accent} />
               </View>
-              <Text style={styles.actionLabel}>Discover</Text>
+              <Text style={styles.actionLabel}>{t('dashboard.discover')}</Text>
             </TouchableOpacity>
           </ScrollView>
 
@@ -245,7 +247,7 @@ export default function Dashboard({ navigation }) {
           <View style={styles.insightCard}>
             <View style={styles.insightHeader}>
               <Zap size={20} color={colors.accent} />
-              <Text style={styles.insightTitle}>FinSaathi AI Insight</Text>
+              <Text style={styles.insightTitle}>{t('dashboard.aiInsight')}</Text>
             </View>
             <Text style={styles.insightText}>
               {savings > 0
@@ -258,9 +260,9 @@ export default function Dashboard({ navigation }) {
 
           {/* Recent Transactions */}
           <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Recent Transactions</Text>
+            <Text style={styles.sectionTitle}>{t('dashboard.recentTransactions')}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('SpendingReport')}>
-              <Text style={styles.viewAll}>View All</Text>
+              <Text style={styles.viewAll}>{t('dashboard.viewAll')}</Text>
             </TouchableOpacity>
           </View>
 
