@@ -1,0 +1,101 @@
+{
+    "common": {
+        "appName": "FinSaathi",
+        "loading": "Loading...",
+        "error": "Something went wrong",
+        "retry": "Try Again",
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "edit": "Edit",
+        "done": "Done",
+        "next": "Next",
+        "back": "Back",
+        "continue": "Continue",
+        "rupee": "₹"
+    },
+    "auth": {
+        "welcome": "Welcome to FinSaathi",
+        "tagline": "Your Money. Your Future. Simplified.",
+        "enterPhone": "Enter your mobile number",
+        "sendOtp": "Send OTP",
+        "enterOtp": "Enter 6-digit OTP",
+        "verifyOtp": "Verify OTP",
+        "otpSent": "OTP sent to {{phone}}"
+    },
+    "onboarding": {
+        "selectLanguage": "Choose your language",
+        "incomeQuestion": "What is your monthly income range?",
+        "goalQuestion": "What is your primary financial goal?",
+        "savingsQuestion": "Do you have any existing savings?",
+        "letsGo": "Let's Build Your Financial Future!"
+    },
+    "dashboard": {
+        "greeting": "Good {{timeOfDay}}",
+        "namaste": "Namaste, {{name}}",
+        "totalSpending": "Total Spending",
+        "totalIncome": "Total Income",
+        "savings": "Net Savings",
+        "quickActions": "Quick Actions",
+        "addExpense": "Add Expense",
+        "askAI": "Ask AI",
+        "recentTransactions": "Recent Transactions",
+        "aiInsight": "FinSaathi AI Insight",
+        "viewAll": "View All"
+    },
+    "goals": {
+        "myEmpire": "My Empire",
+        "totalWealth": "Total Wealth Accumulated",
+        "treasuryGoals": "Treasury Goals",
+        "addGoal": "Add New Goal",
+        "target": "TARGET",
+        "of": "of",
+        "goalAchieved": "Goal Achieved! 🎉"
+    },
+    "chat": {
+        "title": "FinSaathi Advisor",
+        "online": "Online • Concierge",
+        "placeholder": "Type a message...",
+        "thinking": "Thinking..."
+    },
+    "expenses": {
+        "enterAmount": "Enter Amount",
+        "saveExpense": "Save Expense",
+        "category": "Category",
+        "categories": {
+            "food": "Food",
+            "transport": "Transport",
+            "shopping": "Shopping",
+            "bills": "Bills",
+            "health": "Health",
+            "entertainment": "Entertainment",
+            "education": "Education",
+            "emi": "EMI"
+        }
+    },
+    "insights": {
+        "healthScore": "Financial Health Score",
+        "spendingReport": "Spending Report",
+        "monthlyTrend": "Monthly Trend",
+        "thisMonth": "This Month",
+        "lastMonth": "Last Month"
+    },
+    "profile": {
+        "settings": "Profile Settings",
+        "language": "Language",
+        "security": "Security",
+        "notifications": "Notifications",
+        "logout": "Logout"
+    },
+    "sip": {
+        "title": "SIP Calculator",
+        "monthlyInvestment": "Monthly Investment",
+        "timePeriod": "Time Period",
+        "expectedReturn": "Expected Annual Return",
+        "futureValue": "Your SIP Will Grow To",
+        "totalInvested": "Total Invested",
+        "wealthGained": "Wealth Gained",
+        "recommendedFunds": "Recommended Funds",
+        "startSIP": "Start SIP"
+    }
+}

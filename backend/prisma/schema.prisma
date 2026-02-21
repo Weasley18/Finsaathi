@@ -1,0 +1,396 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────
+
+enum ApprovalStatus {
+  APPROVED
+  PENDING
+  REJECTED
+  SUSPENDED
+}
+
+enum Role {
+  END_USER
+  ADVISOR
+  PARTNER
+  ADMIN
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionSource {
+  MANUAL
+  SMS
+  UPI
+  OCR
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+  ABANDONED
+}
+
+enum BudgetPeriod {
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum IncomeRange {
+  BELOW_10K
+  FROM_10K_TO_25K
+  FROM_25K_TO_50K
+  FROM_50K_TO_1L
+  ABOVE_1L
+}
+
+enum RiskProfile {
+  CONSERVATIVE
+  MODERATE
+  AGGRESSIVE
+}
+
+
+enum AdvisorTier {
+  FREE
+  PREMIUM
+}
+
+enum DifficultyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+// ─── Models ──────────────────────────────────────────────────────
+
+model User {
+  id             String         @id @default(cuid())
+  phone          String         @unique
+  name           String?
+  language       String         @default("en")
+  incomeRange    IncomeRange?
+  riskProfile    RiskProfile?
+  role           Role           @default(END_USER)
+  approvalStatus ApprovalStatus @default(APPROVED)
+  tier           AdvisorTier? // Only for ADVISOR role
+  businessId     String?      // Stores SEBI ARN or GSTIN for Partners
+  avatarUrl      String?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Gamification
+  points        Int          @default(0)
+  streakDays    Int          @default(0)
+  lastActiveAt  DateTime?
+
+  // Relations
+  transactions     Transaction[]
+  budgets          Budget[]
+  goals            Goal[]
+  chatMessages     ChatMessage[]
+  documents        Document[]
+  badges           Badge[]
+  activities       ActivityTracker[]
+  financialProfile FinancialProfile?
+  
+  // Advisor-Client Relationship
+  advisorClients   AdvisorClient[] @relation("AdvisorClients") // Clients assigned to this advisor
+  assignedAdvisor  AdvisorClient?  @relation("ClientAdvisor")  // The advisor assigned to this client
+  notifications    Notification[]
+  partnerProducts  PartnerProduct[]
+  partnerMatches   PartnerMatch[]
+
+  @@map("users")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // 'INFO', 'WARNING', 'SUCCESS', 'ERROR'
+  data      String?  // JSON for extra details
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model AdvisorClient {
+  id        String   @id @default(cuid())
+  advisorId String
+  clientId  String   @unique // One client can have only one advisor for now
+  assignedAt DateTime @default(now())
+  
+  advisor   User     @relation("AdvisorClients", fields: [advisorId], references: [id], onDelete: Cascade)
+  client    User     @relation("ClientAdvisor", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([advisorId])
+  @@map("advisor_clients")
+}
+
+// Advisor notes, advice, and action plans — indexed into ChromaDB
+// to power the Advisor AI Clone (few-shot RAG mimicry)
+model AdvisorNote {
+  id         String   @id @default(cuid())
+  advisorId  String
+  clientId   String?  // null = general advice, set = client-specific
+  content    String   // The advisor's note/advice text
+  category   String?  // 'action_plan', 'observation', 'advice', 'general_tip'
+  isIndexed  Boolean  @default(false) // Whether indexed in ChromaDB
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([advisorId])
+  @@index([clientId])
+  @@map("advisor_notes")
+}
+
+model Lesson {
+  id          String          @id @default(cuid())
+  title       String
+  description String
+  content     String          // Markdown content
+  icon        String?         // Emoji or URL
+  difficulty  DifficultyLevel @default(BEGINNER)
+  category    String          // Savings, Investing, etc.
+  views       Int             @default(0)
+  isActive    Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("lessons")
+}
+
+model Scheme {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  eligibility String
+  benefits    String
+  link        String?
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("schemes")
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  userId      String
+  amount      Float
+  type        TransactionType
+  category    String
+  merchant    String?
+  description String?
+  source      TransactionSource @default(MANUAL)
+  date        DateTime          @default(now())
+  createdAt   DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([userId, category])
+  @@map("transactions")
+}
+
+model Budget {
+  id        String       @id @default(cuid())
+  userId    String
+  category  String
+  limit     Float
+  spent     Float        @default(0)
+  period    BudgetPeriod @default(MONTHLY)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category, period])
+  @@map("budgets")
+}
+
+model Goal {
+  id            String     @id @default(cuid())
+  userId        String
+  name          String
+  icon          String?
+  targetAmount  Float
+  currentAmount Float      @default(0)
+  targetDate    DateTime?
+  status        GoalStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("goals")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String
+  role      String   // 'user' | 'assistant' | 'system'
+  toolCalls String?  // JSON string of MCP tool calls/results
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("chat_messages")
+}
+
+model Document {
+  id            String   @id @default(cuid())
+  userId        String
+  type          String   // 'pan', 'aadhaar', 'salary_slip', 'bank_statement', 'insurance'
+  fileName      String
+  storageKey    String
+  extractedData String?  // JSON string of OCR-extracted fields
+  uploadedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("documents")
+}
+
+model FinancialProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  healthScore       Float?   // 0-100
+  savingsRate       Float?   // percentage
+  debtToIncome      Float?   // ratio
+  emergencyFundMonths Float?
+  investmentDiversity Float? // 0-1 score
+  spendingVolatility  Float?
+  goalAdherence     Float?   // percentage
+  lastCalculated    DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("financial_profiles")
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, code])
+  @@map("otp_codes")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  details    String?  // JSON
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource, resourceId])
+  @@map("audit_logs")
+}
+
+// ─── Partner Models ──────────────────────────────────────────────
+
+enum MatchStatus {
+  MATCHED
+  APPLIED
+  ONBOARDED
+}
+
+model PartnerProduct {
+  id                 String   @id @default(cuid())
+  partnerId          String
+  name               String
+  description        String
+  type               String   // 'microloan', 'insurance', 'savings_account', 'scheme'
+  eligibilityCriteria String?  // JSON: { incomeRange, employmentType, location }
+  interestRate       Float?
+  minAmount          Float?
+  maxAmount          Float?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  partner User           @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  matches PartnerMatch[]
+
+  @@index([partnerId])
+  @@map("partner_products")
+}
+
+model PartnerMatch {
+  id        String      @id @default(cuid())
+  productId String
+  userId    String
+  status    MatchStatus @default(MATCHED)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  product PartnerProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, productId])
+  @@index([status])
+  @@map("partner_matches")
+}
+
+// ─── Gamification Models ─────────────────────────────────────────
+
+model Badge {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String
+  icon        String   // Emoji or URL
+  awardedAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("badges")
+}
+
+model ActivityTracker {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // 'LOG_EXPENSE', 'CREATE_GOAL', 'READ_LESSON'
+  points    Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, action, createdAt])
+  @@map("activity_trackers")
+}

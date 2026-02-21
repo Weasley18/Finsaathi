@@ -1,0 +1,135 @@
+import React, { useState, useEffect } from 'react';
+import { api } from '../api';
+import { BookOpen, Clock, CheckCircle, ChevronRight, Star, GraduationCap, Shield, TrendingUp, Wallet, Lock } from 'lucide-react';
+
+const CATEGORY_ICONS = {
+    Basics: Wallet,
+    Loans: Shield,
+    Credit: Star,
+    Investment: TrendingUp,
+    Budgeting: GraduationCap,
+    Savings: Lock,
+    Tax: Shield,
+    Security: Lock,
+};
+
+const CATEGORY_COLORS = {
+    Basics: '#4CAF50',
+    Loans: '#2196F3',
+    Credit: '#FF9800',
+    Investment: '#9C27B0',
+    Budgeting: '#00BCD4',
+    Savings: '#E91E63',
+    Tax: '#607D8B',
+    Security: '#F44336',
+};
+
+export default function LearnPage() {
+    const [lessons, setLessons] = useState([]);
+    const [activeCategory, setActiveCategory] = useState('All');
+    const [expandedLesson, setExpandedLesson] = useState(null);
+
+    useEffect(() => {
+        api.getLessons?.()
+            .then(data => setLessons(data.lessons || []))
+            .catch(() => { });
+    }, []);
+
+    const demoLessons = [
+        { id: 1, title: 'What is Inflation?', description: 'Understanding how prices increase over time and how it affects your savings.', duration: '3 min', category: 'Basics', difficulty: 'Beginner' },
+        { id: 2, title: 'How Does EMI Work?', description: 'Learn how Equated Monthly Installments break down your loan payments.', duration: '3 min', category: 'Loans', difficulty: 'Beginner' },
+        { id: 3, title: 'Understanding CIBIL Score', description: 'Your credit score impacts your ability to get loans. Learn how it works.', duration: '4 min', category: 'Credit', difficulty: 'Beginner' },
+        { id: 4, title: 'SIP vs Lump Sum Investment', description: 'Which investment strategy works better for you?', duration: '3 min', category: 'Investment', difficulty: 'Intermediate' },
+        { id: 5, title: 'The 50/30/20 Budget Rule', description: 'A simple budgeting framework that works for every income level.', duration: '2 min', category: 'Budgeting', difficulty: 'Beginner' },
+        { id: 6, title: 'Emergency Fund 101', description: 'Why you need 3-6 months of expenses saved and how to build it.', duration: '3 min', category: 'Savings', difficulty: 'Beginner' },
+        { id: 7, title: 'Tax Saving Under Section 80C', description: 'Save up to ₹1.5 lakh on taxes with these investment options.', duration: '4 min', category: 'Tax', difficulty: 'Intermediate' },
+        { id: 8, title: 'UPI Fraud Prevention', description: 'Protect yourself from common UPI scams and frauds.', duration: '3 min', category: 'Security', difficulty: 'Beginner' },
+    ];
+
+    const displayLessons = lessons.length > 0 ? lessons : demoLessons;
+    const categories = ['All', ...new Set(displayLessons.map(l => l.category))];
+    const filtered = activeCategory === 'All' ? displayLessons : displayLessons.filter(l => l.category === activeCategory);
+
+    return (
+        <div>
+            <header className="page-header">
+                <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <GraduationCap size={22} color="var(--accent)" /> Financial Literacy
+                </h2>
+                <p>Learn essential money skills in bite-sized lessons</p>
+            </header>
+
+            {/* Category filter */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+                {categories.map(cat => (
+                    <button
+                        key={cat}
+                        onClick={() => setActiveCategory(cat)}
+                        style={{
+                            padding: '8px 16px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                            background: activeCategory === cat ? 'var(--accent)' : 'var(--card-bg)',
+                            color: activeCategory === cat ? '#000' : 'var(--text-secondary)',
+                            fontWeight: 600, fontSize: 13,
+                            borderWidth: 1, borderStyle: 'solid',
+                            borderColor: activeCategory === cat ? 'var(--accent)' : 'var(--card-border)',
+                        }}
+                    >
+                        {cat}
+                    </button>
+                ))}
+            </div>
+
+            {/* Lessons grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+                {filtered.map(lesson => {
+                    const Icon = CATEGORY_ICONS[lesson.category] || BookOpen;
+                    const color = CATEGORY_COLORS[lesson.category] || 'var(--accent)';
+                    return (
+                        <div
+                            key={lesson.id}
+                            className="glass-card"
+                            style={{ padding: 20, cursor: 'pointer', transition: 'transform 0.2s' }}
+                            onClick={() => setExpandedLesson(expandedLesson === lesson.id ? null : lesson.id)}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'start', gap: 12 }}>
+                                <div style={{
+                                    padding: 10, borderRadius: 12,
+                                    background: `${color}22`,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                    <Icon size={20} color={color} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{lesson.title}</div>
+                                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{lesson.description}</div>
+                                </div>
+                                <ChevronRight size={18} color="var(--text-muted)" style={{
+                                    transform: expandedLesson === lesson.id ? 'rotate(90deg)' : 'none',
+                                    transition: 'transform 0.2s',
+                                }} />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+                                <span style={{
+                                    padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                                    background: `${color}22`, color,
+                                }}>
+                                    {lesson.category}
+                                </span>
+                                <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <Clock size={12} /> {lesson.duration}
+                                </span>
+                                <span style={{
+                                    fontSize: 11, padding: '2px 8px', borderRadius: 6,
+                                    background: lesson.difficulty === 'Beginner' ? 'rgba(76,175,80,0.15)' : 'rgba(255,152,0,0.15)',
+                                    color: lesson.difficulty === 'Beginner' ? '#4CAF50' : '#FF9800',
+                                }}>
+                                    {lesson.difficulty}
+                                </span>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
