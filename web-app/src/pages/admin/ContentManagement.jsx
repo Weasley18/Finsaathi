@@ -69,6 +69,66 @@ function LessonModal({ lesson, onClose, onSave }) {
     );
 }
 
+// ─── Scheme Modal ──────────────────────────────────────
+function SchemeModal({ scheme, onClose, onSave }) {
+    const [formData, setFormData] = useState({
+        name: '', description: '', eligibility: '', benefits: '', link: '', isActive: false
+    });
+
+    useEffect(() => {
+        if (scheme) setFormData(scheme);
+    }, [scheme]);
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave(formData);
+    };
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+            <div className="glass-card" style={{ width: 600, maxHeight: '90vh', overflowY: 'auto' }}>
+                <h3 className="section-title">{scheme ? 'Edit Scheme' : 'New Scheme'}</h3>
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <input
+                        className="input" placeholder="Scheme Name" required
+                        value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    />
+                    <textarea
+                        className="input" rows="3" placeholder="Short Description" required
+                        value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    />
+                    <textarea
+                        className="input" rows="3" placeholder="Eligibility Criteria" required
+                        value={formData.eligibility} onChange={e => setFormData({ ...formData, eligibility: e.target.value })}
+                    />
+                    <textarea
+                        className="input" rows="3" placeholder="Key Benefits" required
+                        value={formData.benefits} onChange={e => setFormData({ ...formData, benefits: e.target.value })}
+                    />
+                    <input
+                        className="input" placeholder="External Link (Optional)" type="url"
+                        value={formData.link || ''} onChange={e => setFormData({ ...formData, link: e.target.value })}
+                    />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={formData.isActive} onChange={e => setFormData({ ...formData, isActive: e.target.checked })}
+                        />
+                        Publish immediately
+                    </label>
+                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                        <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+                        <button type="submit" className="btn btn-primary">Save Scheme</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Component ────────────────────────────────────
 export default function ContentManagement() {
     const [activeTab, setActiveTab] = useState('lessons'); // lessons | schemes
@@ -209,13 +269,7 @@ export default function ContentManagement() {
                 activeTab === 'lessons' ? (
                     <LessonModal lesson={editingItem} onClose={() => setShowModal(false)} onSave={handleSave} />
                 ) : (
-                    /* Simplified Scheme Modal logic (reusing or duplicating similar structure) */
-                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                        <div className="glass-card" style={{ padding: 40 }}>
-                            <h3>Scheme Modal Placeholder</h3>
-                            <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Close</button>
-                        </div>
-                    </div>
+                    <SchemeModal scheme={editingItem} onClose={() => setShowModal(false)} onSave={handleSave} />
                 )
             )}
         </div>
