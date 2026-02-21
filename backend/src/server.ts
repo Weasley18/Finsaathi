@@ -14,9 +14,11 @@ import { documentRoutes } from './routes/documents.js';
 import { insightRoutes } from './routes/insights.js';
 import { advisorRoutes } from './routes/advisors.js';
 import { contentRoutes } from './routes/content.js';
+import { analyticsRoutes } from './routes/analytics.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { partnerRoutes } from './routes/partners.js';
 import { adminRoutes } from './routes/admin.js';
+import { gamificationRoutes } from './routes/gamification.js';
 
 // ─── Prisma Client ──────────────────────────────────────────────
 export const prisma = new PrismaClient();
@@ -75,9 +77,11 @@ async function main() {
     app.register(insightRoutes, { prefix: '/api/insights' });
     app.register(advisorRoutes, { prefix: '/api/advisors' });
     app.register(contentRoutes, { prefix: '/api/content' });
+    app.register(analyticsRoutes, { prefix: '/api/analytics' });
     app.register(notificationRoutes, { prefix: '/api/notifications' });
     app.register(partnerRoutes, { prefix: '/api/partners' });
     app.register(adminRoutes, { prefix: '/api/admin' });
+    app.register(gamificationRoutes, { prefix: '/api/gamification' });
 
     // ─── Health Check ──────────────────────────────────────────
     app.get('/api/health', async () => ({
