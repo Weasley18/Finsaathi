@@ -5,6 +5,7 @@ import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import { PrismaClient } from '@prisma/client';
+import { encrypt, decrypt } from './services/encryption.js';
 import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
 import { transactionRoutes } from './routes/transactions.js';
@@ -27,7 +28,68 @@ import { flagRoutes } from './routes/flags.js';
 import { chatroomRoutes } from './routes/chatrooms.js';
 
 // ─── Prisma Client ──────────────────────────────────────────────
-export const prisma = new PrismaClient();
+const basePrisma = new PrismaClient();
+
+export const prisma = basePrisma.$extends({
+    query: {
+        user: {
+            async $allOperations({ operation, args, query }) {
+                // Intercept data for write operations to encrypt
+                const encryptFields = (data: any) => {
+                    if (!data) return;
+                    if (data.legalDocNumber && typeof data.legalDocNumber === 'string') data.legalDocNumber = encrypt(data.legalDocNumber);
+                    if (data.regulatoryRegNumber && typeof data.regulatoryRegNumber === 'string') data.regulatoryRegNumber = encrypt(data.regulatoryRegNumber);
+                    if (data.businessId && typeof data.businessId === 'string') data.businessId = encrypt(data.businessId);
+                };
+
+                if (['create', 'update', 'upsert'].includes(operation)) {
+                    if ((args as any).data) encryptFields((args as any).data);
+                    if ((args as any).create) encryptFields((args as any).create);
+                    if ((args as any).update) encryptFields((args as any).update);
+                }
+
+                const result = await query(args);
+
+                // Intercept result for read operations to decrypt
+                const decryptFields = (record: any) => {
+                    if (!record) return record;
+                    if (record.legalDocNumber) record.legalDocNumber = decrypt(record.legalDocNumber);
+                    if (record.regulatoryRegNumber) record.regulatoryRegNumber = decrypt(record.regulatoryRegNumber);
+                    if (record.businessId) record.businessId = decrypt(record.businessId);
+                    return record;
+                };
+
+                if (Array.isArray(result)) return result.map(decryptFields);
+                return decryptFields(result);
+            },
+        },
+        advisorProfile: {
+            async $allOperations({ operation, args, query }) {
+                const encryptFields = (data: any) => {
+                    if (!data) return;
+                    if (data.baslMembershipId && typeof data.baslMembershipId === 'string') data.baslMembershipId = encrypt(data.baslMembershipId);
+                };
+
+                if (['create', 'update', 'upsert'].includes(operation)) {
+                    if ((args as any).data) encryptFields((args as any).data);
+                    if ((args as any).create) encryptFields((args as any).create);
+                    if ((args as any).update) encryptFields((args as any).update);
+                }
+
+                const result = await query(args);
+
+                const decryptFields = (record: any) => {
+                    if (!record) return record;
+                    if (record.baslMembershipId) record.baslMembershipId = decrypt(record.baslMembershipId);
+                    return record;
+                };
+
+                if (Array.isArray(result)) return result.map(decryptFields);
+                return decryptFields(result);
+            },
+        },
+    },
+}) as any; // Cast to any to avoid TypeScript errors across routes that depend on extended model methods.
 
 // ─── Fastify App ─────────────────────────────────────────────────
 const app = Fastify({

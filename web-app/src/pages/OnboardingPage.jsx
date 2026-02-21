@@ -35,8 +35,6 @@ export default function OnboardingPage() {
 
     // Advisor Fields
     const [dob, setDob] = useState('');
-    const [panNumber, setPanNumber] = useState('');
-    const [userPanDoc, setUserPanDoc] = useState(null);
 
     const [businessAddress, setBusinessAddress] = useState('');
     const [professionalEmail, setProfessionalEmail] = useState('');
@@ -85,11 +83,6 @@ export default function OnboardingPage() {
                 setLoading(false);
                 return;
             }
-            if (!panNumber || !userPanDoc) {
-                setError('PAN Number and PAN Document are required.');
-                setLoading(false);
-                return;
-            }
         }
 
         try {
@@ -119,10 +112,6 @@ export default function OnboardingPage() {
                 await api.uploadDocument(partnerDoc, 'partner_legal_doc');
             }
 
-            if (role === 'END_USER' && userPanDoc) {
-                await api.uploadDocument(userPanDoc, 'user_pan');
-            }
-
             const payload = {
                 name,
                 role,
@@ -130,8 +119,7 @@ export default function OnboardingPage() {
                     incomeRange: income,
                     riskProfile: goal,
                     areasOfInterest,
-                    dob,
-                    panNumber
+                    dob
                 } : {}),
                 ...((role === 'ADVISOR' || role === 'PARTNER') ? { businessId } : {}),
                 ...(role === 'ADVISOR' ? {
@@ -225,27 +213,6 @@ export default function OnboardingPage() {
                                         value={dob}
                                         onChange={e => setDob(e.target.value)}
                                         required
-                                    />
-                                </div>
-                                <div style={styles.inputGroup}>
-                                    <label style={styles.label}>PAN Number</label>
-                                    <input
-                                        className="input"
-                                        value={panNumber}
-                                        onChange={e => setPanNumber(e.target.value.toUpperCase())}
-                                        placeholder="ABCDE1234F"
-                                        maxLength={10}
-                                        required
-                                    />
-                                </div>
-                                <div style={styles.inputGroup}>
-                                    <label style={styles.label}>Upload PAN Card Document</label>
-                                    <input
-                                        type="file"
-                                        className="input"
-                                        onChange={e => setUserPanDoc(e.target.files[0])}
-                                        required
-                                        style={{ padding: '8px' }}
                                     />
                                 </div>
                                 <div style={styles.inputGroup}>
