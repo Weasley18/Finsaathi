@@ -54,7 +54,7 @@ export async function adminRoutes(app: FastifyInstance) {
                 SELECT 
                     TO_CHAR("createdAt", 'Mon') as month,
                     COUNT(*)::int as users
-                FROM "User" 
+                FROM "users" 
                 WHERE "createdAt" >= NOW() - INTERVAL '6 months'
                 GROUP BY TO_CHAR("createdAt", 'Mon'), DATE_TRUNC('month', "createdAt")
                 ORDER BY DATE_TRUNC('month', "createdAt") ASC

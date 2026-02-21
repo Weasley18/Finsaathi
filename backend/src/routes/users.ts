@@ -131,7 +131,10 @@ export async function userRoutes(app: FastifyInstance) {
     }, async (request: any, reply) => {
         const { role, search, page = '1', limit = '50' } = request.query as any;
 
-        const where: any = {};
+        const where: any = {
+            name: { not: null, notIn: [''] },  // Exclude users with no name
+            isActive: true,                     // Only properly signed-up active users
+        };
         if (role) where.role = role;
         if (search) {
             where.OR = [
