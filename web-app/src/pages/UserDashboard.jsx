@@ -20,8 +20,13 @@ export default function UserDashboard() {
             api.getMonthlyTrend().catch(() => []),
         ]).then(([dash, cats, trend]) => {
             setDashboard(dash);
-            setCategoryData(Array.isArray(cats) ? cats : []);
-            setMonthlyTrend(Array.isArray(trend) ? trend : []);
+            const catArr = cats?.categories || (Array.isArray(cats) ? cats : []);
+            setCategoryData(catArr);
+            const trendArr = (trend?.months || (Array.isArray(trend) ? trend : [])).map(m => ({
+                ...m,
+                expenses: m.expense ?? m.expenses ?? 0,
+            }));
+            setMonthlyTrend(trendArr);
             setLoading(false);
         });
     }, []);
