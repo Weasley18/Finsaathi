@@ -92,6 +92,23 @@ model User {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
+  // Partner specific fields
+  legalDocType         String?      // e.g. "CIN", "NGO_REGISTRATION", "PAN"
+  legalDocNumber       String?      
+  registeredAddr       String?
+  regulatoryRegNumber  String?      // e.g. "RBI_REG", "SEBI_REG", "NGO_DARPAN"
+  complianceOfficerEmail String? 
+  complianceOfficerPhone String?
+  technicalContactEmail  String?
+  technicalContactPhone  String?
+  digitalAcceptanceOfTerms Boolean @default(false)
+  hasSignedDataProcessAgreement Boolean @default(false)
+  hasSignedNoPIIAccess   Boolean @default(false)
+  hasSignedNoDataResale  Boolean @default(false)
+  hasSignedBreachReport  Boolean @default(false)
+  webhookUrl             String?    // Checks basic technical readiness
+  oauthCompatible        Boolean @default(false)
+
   // Gamification
   points        Int          @default(0)
   streakDays    Int          @default(0)

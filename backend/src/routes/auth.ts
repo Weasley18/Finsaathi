@@ -18,7 +18,24 @@ const profileSchema = z.object({
     riskProfile: z.enum(['CONSERVATIVE', 'MODERATE', 'AGGRESSIVE']).optional(),
     role: z.enum(['END_USER', 'ADVISOR', 'PARTNER']).optional(),
     tier: z.enum(['FREE', 'PREMIUM']).optional(),
-    businessId: z.string().optional()
+    businessId: z.string().optional(),
+
+    // Partner specific fields
+    legalDocType: z.string().optional(),
+    legalDocNumber: z.string().optional(),
+    registeredAddr: z.string().optional(),
+    regulatoryRegNumber: z.string().optional(),
+    complianceOfficerEmail: z.string().optional(),
+    complianceOfficerPhone: z.string().optional(),
+    technicalContactEmail: z.string().optional(),
+    technicalContactPhone: z.string().optional(),
+    digitalAcceptanceOfTerms: z.boolean().optional(),
+    hasSignedDataProcessAgreement: z.boolean().optional(),
+    hasSignedNoPIIAccess: z.boolean().optional(),
+    hasSignedNoDataResale: z.boolean().optional(),
+    hasSignedBreachReport: z.boolean().optional(),
+    webhookUrl: z.string().optional(),
+    oauthCompatible: z.boolean().optional(),
 });
 
 export async function authRoutes(app: FastifyInstance) {
