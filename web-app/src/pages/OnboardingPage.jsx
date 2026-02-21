@@ -10,6 +10,26 @@ export default function OnboardingPage() {
     const [businessId, setBusinessId] = useState(''); // ARN or GSTIN
     const [income, setIncome] = useState('FROM_25K_TO_50K');
     const [goal, setGoal] = useState('MODERATE');
+
+    // Partner-specific state
+    const [partnerData, setPartnerData] = useState({
+        legalDocType: '',
+        legalDocNumber: '',
+        registeredAddr: '',
+        regulatoryRegNumber: '',
+        complianceOfficerEmail: '',
+        complianceOfficerPhone: '',
+        technicalContactEmail: '',
+        technicalContactPhone: '',
+        webhookUrl: '',
+        digitalAcceptanceOfTerms: false,
+        hasSignedDataProcessAgreement: false,
+        hasSignedNoPIIAccess: false,
+        hasSignedNoDataResale: false,
+        hasSignedBreachReport: false,
+        oauthCompatible: false
+    });
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -24,7 +44,8 @@ export default function OnboardingPage() {
                 name,
                 role,
                 ...(role === 'END_USER' ? { incomeRange: income, riskProfile: goal } : {}),
-                ...((role === 'ADVISOR' || role === 'PARTNER') ? { businessId } : {})
+                ...(role === 'ADVISOR' ? { businessId } : {}),
+                ...(role === 'PARTNER' ? { ...partnerData } : {})
             };
 
             await api.completeProfile(payload);
@@ -131,24 +152,128 @@ export default function OnboardingPage() {
                         )}
 
                         {role === 'PARTNER' && (
-                            <div style={styles.inputGroup}>
-                                <label style={styles.label}>GSTIN</label>
-                                <input
-                                    className="input"
-                                    value={businessId}
-                                    onChange={e => setBusinessId(e.target.value)}
-                                    placeholder="e.g. 27AAAAA0000A1Z5"
-                                    required
-                                />
-                            </div>
+                            <>
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 20 }}>
+                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>1️⃣ Legal Existence (Non-Negotiable)</h3>
+
+                                    <div style={styles.inputGroup}>
+                                        <label style={styles.label}>Legal Document Type</label>
+                                        <select className="input" value={partnerData.legalDocType} onChange={e => setPartnerData({ ...partnerData, legalDocType: e.target.value })} style={styles.select}>
+                                            <option value="">Select Document Type...</option>
+                                            <option value="CIN">Corporate Identification Number (CIN)</option>
+                                            <option value="NGO_REGISTRATION">NGO Registration Certificate</option>
+                                            <option value="PAN">Organization PAN</option>
+                                        </select>
+                                    </div>
+
+                                    <div style={styles.inputGroup}>
+                                        <label style={styles.label}>Legal Document Number</label>
+                                        <input className="input" value={partnerData.legalDocNumber} onChange={e => setPartnerData({ ...partnerData, legalDocNumber: e.target.value })} placeholder="e.g. U74999MH..." required />
+                                    </div>
+
+                                    <div style={styles.inputGroup}>
+                                        <label style={styles.label}>Registered Office Address</label>
+                                        <textarea className="input" value={partnerData.registeredAddr} onChange={e => setPartnerData({ ...partnerData, registeredAddr: e.target.value })} placeholder="Full legal address..." rows={2} required />
+                                    </div>
+                                </div>
+
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 20 }}>
+                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>2️⃣ Regulatory Legitimacy</h3>
+
+                                    <div style={styles.inputGroup}>
+                                        <label style={styles.label}>Regulatory Registration ID (RBI / SEBI / NGO Darpan)</label>
+                                        <input className="input" value={partnerData.regulatoryRegNumber} onChange={e => setPartnerData({ ...partnerData, regulatoryRegNumber: e.target.value })} placeholder="e.g. SEBI Reg No. INA0000..." required />
+                                        <div style={styles.helpText}>Must be independently verifiable on government portals.</div>
+                                    </div>
+                                </div>
+
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 20 }}>
+                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>3️⃣ Responsible Person Declaration</h3>
+
+                                    <div style={styles.twoColumnGrid}>
+                                        <div style={styles.inputGroup}>
+                                            <label style={styles.label}>Compliance Email</label>
+                                            <input type="email" className="input" value={partnerData.complianceOfficerEmail} onChange={e => setPartnerData({ ...partnerData, complianceOfficerEmail: e.target.value })} placeholder="compliance@domain.com" required />
+                                        </div>
+                                        <div style={styles.inputGroup}>
+                                            <label style={styles.label}>Compliance Phone</label>
+                                            <input type="tel" className="input" value={partnerData.complianceOfficerPhone} onChange={e => setPartnerData({ ...partnerData, complianceOfficerPhone: e.target.value })} placeholder="+91..." required />
+                                        </div>
+                                    </div>
+
+                                    <div style={styles.twoColumnGrid}>
+                                        <div style={styles.inputGroup}>
+                                            <label style={styles.label}>Technical Contact Email</label>
+                                            <input type="email" className="input" value={partnerData.technicalContactEmail} onChange={e => setPartnerData({ ...partnerData, technicalContactEmail: e.target.value })} placeholder="tech@domain.com" required />
+                                        </div>
+                                        <div style={styles.inputGroup}>
+                                            <label style={styles.label}>Technical Contact Phone</label>
+                                            <input type="tel" className="input" value={partnerData.technicalContactPhone} onChange={e => setPartnerData({ ...partnerData, technicalContactPhone: e.target.value })} placeholder="+91..." required />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 20 }}>
+                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>4️⃣ Mandatory Legal Agreement Signing</h3>
+
+                                    <div style={styles.checkboxGroup}>
+                                        <label style={styles.checkboxLabel}>
+                                            <input type="checkbox" checked={partnerData.hasSignedDataProcessAgreement} onChange={e => setPartnerData({ ...partnerData, hasSignedDataProcessAgreement: e.target.checked })} required />
+                                            <span>I agree to the Data Processing Agreement</span>
+                                        </label>
+                                        <label style={styles.checkboxLabel}>
+                                            <input type="checkbox" checked={partnerData.hasSignedNoPIIAccess} onChange={e => setPartnerData({ ...partnerData, hasSignedNoPIIAccess: e.target.checked })} required />
+                                            <span>I agree to the No PII Access Clause</span>
+                                        </label>
+                                        <label style={styles.checkboxLabel}>
+                                            <input type="checkbox" checked={partnerData.hasSignedNoDataResale} onChange={e => setPartnerData({ ...partnerData, hasSignedNoDataResale: e.target.checked })} required />
+                                            <span>I agree to the No Data Resale Clause</span>
+                                        </label>
+                                        <label style={styles.checkboxLabel}>
+                                            <input type="checkbox" checked={partnerData.hasSignedBreachReport} onChange={e => setPartnerData({ ...partnerData, hasSignedBreachReport: e.target.checked })} required />
+                                            <span>I agree to the Breach Reporting Agreement</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 20 }}>
+                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>5️⃣ Basic Technical Readiness</h3>
+
+                                    <div style={styles.inputGroup}>
+                                        <label style={styles.label}>Secure Webhook URL (HTTPS)</label>
+                                        <input type="url" className="input" value={partnerData.webhookUrl} onChange={e => setPartnerData({ ...partnerData, webhookUrl: e.target.value })} placeholder="https://api.domain.com/webhooks" required />
+                                    </div>
+
+                                    <div style={styles.checkboxGroup}>
+                                        <label style={styles.checkboxLabel}>
+                                            <input type="checkbox" checked={partnerData.oauthCompatible} onChange={e => setPartnerData({ ...partnerData, oauthCompatible: e.target.checked })} required />
+                                            <span>We are an OAuth 2.0 compatible system</span>
+                                        </label>
+                                        <label style={styles.checkboxLabel}>
+                                            <input type="checkbox" checked={partnerData.digitalAcceptanceOfTerms} onChange={e => setPartnerData({ ...partnerData, digitalAcceptanceOfTerms: e.target.checked })} required />
+                                            <span>I digitally accept all FinSaathi Terms & Conditions</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </>
                         )}
 
                         <button
                             type="submit"
-                            disabled={!name || ((role === 'ADVISOR' || role === 'PARTNER') && !businessId) || loading}
+                            disabled={
+                                !name ||
+                                (role === 'ADVISOR' && !businessId) ||
+                                (role === 'PARTNER' && (!partnerData.legalDocNumber || !partnerData.regulatoryRegNumber || !partnerData.complianceOfficerEmail || !partnerData.hasSignedDataProcessAgreement)) ||
+                                loading
+                            }
                             style={{
                                 ...styles.submitBtn,
-                                opacity: (!name || ((role === 'ADVISOR' || role === 'PARTNER') && !businessId) || loading) ? 0.5 : 1
+                                opacity: (
+                                    !name ||
+                                    (role === 'ADVISOR' && !businessId) ||
+                                    (role === 'PARTNER' && (!partnerData.legalDocNumber || !partnerData.regulatoryRegNumber || !partnerData.complianceOfficerEmail || !partnerData.hasSignedDataProcessAgreement)) ||
+                                    loading
+                                ) ? 0.5 : 1
                             }}
                         >
                             {loading ? 'Setting up...' : 'Complete Profile'} <ArrowRight size={18} />
