@@ -75,10 +75,27 @@ export async function messageRoutes(app: FastifyInstance) {
             distinct: ['senderId'],
         });
 
-        const partnerIds = [...new Set([
-            ...sent.map(s => s.receiverId),
-            ...received.map(r => r.senderId),
-        ])];
+        const partnerIdsSet = new Set([
+            ...sent.map((s: any) => s.receiverId),
+            ...received.map((r: any) => r.senderId),
+        ]);
+
+        // Also include explicitly assigned advisors/clients even if no messages exist yet
+        const relationships = await prisma.advisorClient.findMany({
+            where: {
+                OR: [
+                    { clientId: userId },
+                    { advisorId: userId },
+                ]
+            },
+        });
+
+        for (const rel of relationships) {
+            const pid = rel.clientId === userId ? rel.advisorId : rel.clientId;
+            partnerIdsSet.add(pid);
+        }
+
+        const partnerIds = Array.from(partnerIdsSet);
 
         // For each partner, get last message + unread count
         const conversations = await Promise.all(partnerIds.map(async (partnerId) => {

@@ -114,7 +114,7 @@ export async function userRoutes(app: FastifyInstance) {
             },
             goals,
             recentTransactions,
-            categorySpending: categorySpending.map(c => ({
+            categorySpending: categorySpending.map((c: any) => ({
                 category: c.category,
                 amount: c._sum.amount || 0,
             })),
