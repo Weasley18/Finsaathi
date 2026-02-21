@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
 import { z } from 'zod';
 import { requireRole, requireTier, requireApproval } from '../middleware/rbac';
-import { chatWithOllama } from '../services/ollama';
+import { chatWithOllama, generateChatTitle } from '../services/ollama';
 import {
     indexAdvisorNote,
     indexAdvisorChatResponse,
@@ -27,6 +27,7 @@ const noteSchema = z.object({
 
 const chatSchema = z.object({
     message: z.string().min(1),
+    chatRoomId: z.string().nullish(),
 });
 
 export async function advisorRoutes(app: FastifyInstance) {
@@ -153,6 +154,49 @@ export async function advisorRoutes(app: FastifyInstance) {
         return reply.send({ clients });
     });
 
+    // ─── Get Advisor Dashboard Stats ───────────────────────────
+    app.get('/:id/stats', {
+        preHandler: [requireRole('ADVISOR', 'ADMIN'), requireApproval()],
+    }, async (request: any, reply) => {
+        const { id } = request.params as { id: string };
+        const userRole = request.user.role;
+        const userId = request.user.userId;
+
+        if (userRole === 'ADVISOR' && id !== userId) {
+            return reply.status(403).send({ error: 'You can only view your own stats' });
+        }
+
+        // Get client IDs for this advisor
+        const relations = await prisma.advisorClient.findMany({
+            where: { advisorId: id },
+            select: { clientId: true },
+        });
+        const clientIds = relations.map(r => r.clientId);
+
+        // Count active goals across all clients
+        const activeGoals = await prisma.goal.count({
+            where: { userId: { in: clientIds }, status: 'ACTIVE' },
+        });
+
+        // Count recommendations sent by this advisor
+        const recommendations = await prisma.recommendation.count({
+            where: { advisorId: id },
+        });
+
+        // Per-client goal counts
+        const clientGoals: Record<string, number> = {};
+        if (clientIds.length > 0) {
+            const goalCounts = await prisma.goal.groupBy({
+                by: ['userId'],
+                where: { userId: { in: clientIds }, status: 'ACTIVE' },
+                _count: true,
+            });
+            goalCounts.forEach(g => { clientGoals[g.userId] = g._count; });
+        }
+
+        return reply.send({ activeGoals, recommendations, clientGoals });
+    });
+
     // ─── Assign Client to Advisor (Admin Only) ─────────────────
     app.post('/:id/assign', {
         preHandler: [requireRole('ADMIN')],
@@ -255,8 +299,25 @@ export async function advisorRoutes(app: FastifyInstance) {
     app.post('/chat', {
         preHandler: [requireRole('ADVISOR'), requireApproval()],
     }, async (request: any, reply) => {
-        const { message } = chatSchema.parse(request.body);
+        const { message, chatRoomId: inputRoomId } = chatSchema.parse(request.body);
         const advisorId = request.user.userId;
+
+        // ─── Resolve or Create Chat Room ────────────────────────
+        let chatRoomId = inputRoomId;
+        let isFirstMessage = false;
+
+        if (chatRoomId) {
+            const room = await prisma.chatRoom.findFirst({ where: { id: chatRoomId, userId: advisorId } });
+            if (!room) return reply.status(404).send({ error: 'Chat room not found' });
+            const msgCount = await prisma.chatMessage.count({ where: { chatRoomId } });
+            isFirstMessage = msgCount === 0;
+        } else {
+            const room = await prisma.chatRoom.create({
+                data: { userId: advisorId, type: 'COPILOT', title: 'New Chat' },
+            });
+            chatRoomId = room.id;
+            isFirstMessage = true;
+        }
 
         const advisor = await prisma.user.findUnique({
             where: { id: advisorId },
@@ -325,15 +386,15 @@ ${atRiskClients.length > 0 ? `\n⚠️ AT-RISK CLIENTS:\n${atRiskClients.map(c =
 
         const systemPrompt = buildCoPilotSystemPrompt(advisor?.name || 'Advisor', cohortContext);
 
-        // Get chat history
+        // Get chat history — scoped to this room
         const recentMessages = await prisma.chatMessage.findMany({
-            where: { userId: advisorId },
+            where: { chatRoomId },
             orderBy: { createdAt: 'desc' },
             take: 10,
         });
 
         await prisma.chatMessage.create({
-            data: { userId: advisorId, content: message, role: 'user' },
+            data: { userId: advisorId, chatRoomId, content: message, role: 'user' },
         });
 
         const chatHistory = recentMessages.reverse().map(m => ({
@@ -346,8 +407,21 @@ ${atRiskClients.length > 0 ? `\n⚠️ AT-RISK CLIENTS:\n${atRiskClients.map(c =
 
         // Save and index the response
         const saved = await prisma.chatMessage.create({
-            data: { userId: advisorId, content: aiResponse, role: 'assistant' },
+            data: { userId: advisorId, chatRoomId, content: aiResponse, role: 'assistant' },
         });
+
+        // Touch room updatedAt
+        await prisma.chatRoom.update({
+            where: { id: chatRoomId! },
+            data: { updatedAt: new Date() },
+        });
+
+        // Auto-title on first message
+        if (isFirstMessage) {
+            generateChatTitle(message).then(title => {
+                prisma.chatRoom.update({ where: { id: chatRoomId! }, data: { title } }).catch(() => {});
+            });
+        }
 
         // Index the Q&A pair for the clone
         await indexAdvisorChatResponse(advisorId, saved.id, message, aiResponse);
@@ -355,6 +429,7 @@ ${atRiskClients.length > 0 ? `\n⚠️ AT-RISK CLIENTS:\n${atRiskClients.map(c =
         return reply.send({
             response: aiResponse,
             messageId: saved.id,
+            chatRoomId,
             cohortStats: {
                 totalClients,
                 avgHealthScore,
@@ -440,8 +515,25 @@ ${atRiskClients.length > 0 ? `\n⚠️ AT-RISK CLIENTS:\n${atRiskClients.map(c =
     app.post('/clone/chat', {
         preHandler: [requireRole('END_USER')],
     }, async (request: any, reply) => {
-        const { message } = chatSchema.parse(request.body);
+        const { message, chatRoomId: inputRoomId } = chatSchema.parse(request.body);
         const userId = request.user.userId;
+
+        // ─── Resolve or Create Chat Room ────────────────────────
+        let chatRoomId = inputRoomId;
+        let isFirstMessage = false;
+
+        if (chatRoomId) {
+            const room = await prisma.chatRoom.findFirst({ where: { id: chatRoomId, userId } });
+            if (!room) return reply.status(404).send({ error: 'Chat room not found' });
+            const msgCount = await prisma.chatMessage.count({ where: { chatRoomId } });
+            isFirstMessage = msgCount === 0;
+        } else {
+            const room = await prisma.chatRoom.create({
+                data: { userId, type: 'ADVISOR_CLONE', title: 'New Chat' },
+            });
+            chatRoomId = room.id;
+            isFirstMessage = true;
+        }
 
         // Find the user's assigned advisor
         const assignment = await prisma.advisorClient.findUnique({
@@ -499,15 +591,15 @@ Budgets: ${budgets.map(b => `${b.category}: ₹${b.spent.toLocaleString()}/₹${
             clientContext
         );
 
-        // Get chat history
+        // Get chat history — scoped to this room
         const recentMessages = await prisma.chatMessage.findMany({
-            where: { userId },
+            where: { chatRoomId },
             orderBy: { createdAt: 'desc' },
             take: 10,
         });
 
         await prisma.chatMessage.create({
-            data: { userId, content: message, role: 'user' },
+            data: { userId, chatRoomId, content: message, role: 'user' },
         });
 
         const chatHistory = recentMessages.reverse().map(m => ({
@@ -521,15 +613,30 @@ Budgets: ${budgets.map(b => `${b.category}: ₹${b.spent.toLocaleString()}/₹${
         const saved = await prisma.chatMessage.create({
             data: {
                 userId,
+                chatRoomId,
                 content: aiResponse,
                 role: 'assistant',
                 toolCalls: JSON.stringify(['advisor_clone']),
             },
         });
 
+        // Touch room updatedAt
+        await prisma.chatRoom.update({
+            where: { id: chatRoomId! },
+            data: { updatedAt: new Date() },
+        });
+
+        // Auto-title on first message
+        if (isFirstMessage) {
+            generateChatTitle(message).then(title => {
+                prisma.chatRoom.update({ where: { id: chatRoomId! }, data: { title } }).catch(() => {});
+            });
+        }
+
         return reply.send({
             response: aiResponse,
             messageId: saved.id,
+            chatRoomId,
             advisorName: advisor.name,
             isClone: true,
             advisorOnline: advisor.isActive,

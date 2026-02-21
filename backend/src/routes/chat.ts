@@ -2,11 +2,12 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
 import { z } from 'zod';
 import { executeMCPTool, getToolDescriptionsForPrompt, getToolsForOllama } from '../services/mcp';
-import { getSystemPrompt, chatWithOllama, chatWithTools } from '../services/ollama';
+import { getSystemPrompt, chatWithOllama, chatWithTools, generateChatTitle } from '../services/ollama';
 import { preProcessMessage, postProcessResponse, detectLanguage } from '../services/translation';
 
 const chatSchema = z.object({
     message: z.string().min(1),
+    chatRoomId: z.string().nullish(),
 });
 
 export async function chatRoutes(app: FastifyInstance) {
@@ -14,23 +15,41 @@ export async function chatRoutes(app: FastifyInstance) {
 
     // ─── Send Chat Message ───────────────────────────────────────
     app.post('/', async (request: any, reply) => {
-        const { message } = chatSchema.parse(request.body);
+        const { message, chatRoomId: inputRoomId } = chatSchema.parse(request.body);
         const userId = request.user.userId;
 
+        // ─── Resolve or Create Chat Room ──────────────────────────
+        let chatRoomId = inputRoomId;
+        let isFirstMessage = false;
+
+        if (chatRoomId) {
+            // Validate room belongs to user
+            const room = await prisma.chatRoom.findFirst({ where: { id: chatRoomId, userId } });
+            if (!room) return reply.status(404).send({ error: 'Chat room not found' });
+            const msgCount = await prisma.chatMessage.count({ where: { chatRoomId } });
+            isFirstMessage = msgCount === 0;
+        } else {
+            // Auto-create a new room
+            const room = await prisma.chatRoom.create({
+                data: { userId, type: 'AI_CHAT', title: 'New Chat' },
+            });
+            chatRoomId = room.id;
+            isFirstMessage = true;
+        }
+
         // ─── Multilingual: Detect & Translate ─────────────────────
-        // Language from JWT (set during login), fallback to detection
         const userLang = request.user.language !== 'en' ? request.user.language : undefined;
         const translationCtx = await preProcessMessage(message, userLang);
         const englishMessage = translationCtx.translatedInput;
 
         // Save user message (original language)
         await prisma.chatMessage.create({
-            data: { userId, content: message, role: 'user' },
+            data: { userId, chatRoomId, content: message, role: 'user' },
         });
 
-        // Get recent chat history for context
+        // Get recent chat history for context — scoped to this room
         const recentMessages = await prisma.chatMessage.findMany({
-            where: { userId },
+            where: { chatRoomId },
             orderBy: { createdAt: 'desc' },
             take: 20,
         });
@@ -93,15 +112,30 @@ export async function chatRoutes(app: FastifyInstance) {
         const savedResponse = await prisma.chatMessage.create({
             data: {
                 userId,
+                chatRoomId,
                 content: aiResponse,
                 role: 'assistant',
                 toolCalls: toolsUsed.length > 0 ? JSON.stringify(toolsUsed) : null,
             },
         });
 
+        // Touch room updatedAt
+        await prisma.chatRoom.update({
+            where: { id: chatRoomId },
+            data: { updatedAt: new Date() },
+        });
+
+        // Auto-title on first message (fire and forget)
+        if (isFirstMessage) {
+            generateChatTitle(message).then(title => {
+                prisma.chatRoom.update({ where: { id: chatRoomId! }, data: { title } }).catch(() => {});
+            });
+        }
+
         return reply.send({
             response: aiResponse,
             messageId: savedResponse.id,
+            chatRoomId,
             toolsUsed,
             detectedLanguage: translationCtx.originalLang,
         });
@@ -110,10 +144,14 @@ export async function chatRoutes(app: FastifyInstance) {
     // ─── Get Chat History ────────────────────────────────────────
     app.get('/history', async (request: any, reply) => {
         const userId = request.user.userId;
-        const limit = parseInt((request.query as any).limit || '50');
+        const { limit: limitStr, roomId } = request.query as { limit?: string; roomId?: string };
+        const limit = parseInt(limitStr || '50');
+
+        const where: any = { userId };
+        if (roomId) where.chatRoomId = roomId;
 
         const messages = await prisma.chatMessage.findMany({
-            where: { userId },
+            where,
             orderBy: { createdAt: 'asc' },
             take: limit,
             select: {
@@ -130,9 +168,19 @@ export async function chatRoutes(app: FastifyInstance) {
 
     // ─── Clear Chat History ──────────────────────────────────────
     app.delete('/history', async (request: any, reply) => {
-        await prisma.chatMessage.deleteMany({
-            where: { userId: request.user.userId },
-        });
+        const userId = request.user.userId;
+        const { roomId } = request.query as { roomId?: string };
+
+        if (roomId) {
+            // Delete messages for this room only
+            await prisma.chatMessage.deleteMany({ where: { chatRoomId: roomId, userId } });
+            await prisma.chatRoom.deleteMany({ where: { id: roomId, userId } });
+        } else {
+            // Legacy: delete all
+            await prisma.chatMessage.deleteMany({ where: { userId } });
+            await prisma.chatRoom.deleteMany({ where: { userId } });
+        }
+
         return reply.send({ success: true });
     });
 }

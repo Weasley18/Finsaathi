@@ -28,6 +28,10 @@ export default function AppNavigator() {
                 <Stack.Screen name="LinkFinance" component={Screens.LinkFinance} />
                 <Stack.Screen name="AdvisorDashboard" component={Screens.AdvisorDashboard} />
                 <Stack.Screen name="AdvisorClientDetail" component={Screens.AdvisorClientDetail} />
+                <Stack.Screen name="AdvisorCoPilotChat" component={Screens.AdvisorCoPilotChat} />
+                <Stack.Screen name="DirectMessages" component={Screens.DirectMessages} />
+                <Stack.Screen name="Recommendations" component={Screens.Recommendations} />
+                <Stack.Screen name="Notifications" component={Screens.Notifications} />
                 <Stack.Screen name="SIPCalculator" component={Screens.SIPCalculator} />
                 <Stack.Screen name="WaitingRoom" component={Screens.WaitingRoom} />
                 <Stack.Screen name="DiscoverMarketplace" component={Screens.DiscoverMarketplace} />

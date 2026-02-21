@@ -28,6 +28,9 @@ const useFinanceStore = create((set, get) => ({
     // Chat
     chatMessages: [],
     chatLoading: false,
+    chatRooms: [],
+    activeChatRoomId: null,
+    chatRoomsLoading: false,
 
     // ─── Dashboard ─────────────────────────────────────────────
     fetchDashboard: async () => {
@@ -166,11 +169,85 @@ const useFinanceStore = create((set, get) => ({
         }
     },
 
-    // ─── Chat ──────────────────────────────────────────────────
-    fetchChatHistory: async () => {
+    // ─── Chat Rooms ─────────────────────────────────────────────
+    fetchChatRooms: async (type) => {
+        set({ chatRoomsLoading: true });
         try {
-            const { data } = await api.get('/chat/history');
-            set({ chatMessages: data.messages });
+            const { data } = await api.getChatRooms(type);
+            set({ chatRooms: data.rooms || [], chatRoomsLoading: false });
+            return data.rooms || [];
+        } catch (error) {
+            set({ chatRoomsLoading: false });
+            console.error('Chat rooms error:', error);
+            return [];
+        }
+    },
+
+    createChatRoom: async (type) => {
+        try {
+            const { data } = await api.createChatRoom(type);
+            const newRoom = data.room;
+            set((state) => ({
+                chatRooms: [newRoom, ...state.chatRooms],
+                activeChatRoomId: newRoom.id,
+                chatMessages: [],
+            }));
+            return newRoom;
+        } catch (error) {
+            console.error('Create room error:', error);
+        }
+    },
+
+    selectChatRoom: async (roomId) => {
+        set({ activeChatRoomId: roomId, chatMessages: [] });
+        if (roomId) {
+            try {
+                const { data } = await api.getChatHistory(roomId);
+                set({ chatMessages: data.messages || [] });
+            } catch (error) {
+                console.error('Room history error:', error);
+            }
+        }
+    },
+
+    deleteChatRoom: async (roomId) => {
+        try {
+            await api.deleteChatRoom(roomId);
+            const { chatRooms, activeChatRoomId } = get();
+            const remaining = chatRooms.filter(r => r.id !== roomId);
+            const updates = { chatRooms: remaining };
+            if (activeChatRoomId === roomId) {
+                updates.activeChatRoomId = remaining.length > 0 ? remaining[0].id : null;
+                updates.chatMessages = [];
+                if (remaining.length > 0) {
+                    try {
+                        const { data } = await api.getChatHistory(remaining[0].id);
+                        updates.chatMessages = data.messages || [];
+                    } catch { }
+                }
+            }
+            set(updates);
+        } catch (error) {
+            console.error('Delete room error:', error);
+        }
+    },
+
+    renameChatRoom: async (roomId, title) => {
+        try {
+            await api.renameChatRoom(roomId, title);
+            set((state) => ({
+                chatRooms: state.chatRooms.map(r => r.id === roomId ? { ...r, title } : r),
+            }));
+        } catch (error) {
+            console.error('Rename room error:', error);
+        }
+    },
+
+    // ─── Chat ──────────────────────────────────────────────────
+    fetchChatHistory: async (roomId) => {
+        try {
+            const { data } = await api.getChatHistory(roomId);
+            set({ chatMessages: data.messages || [] });
         } catch (error) {
             console.error('Chat history error:', error);
         }
@@ -178,6 +255,7 @@ const useFinanceStore = create((set, get) => ({
 
     sendChatMessage: async (message) => {
         set({ chatLoading: true });
+        const { activeChatRoomId } = get();
 
         // Optimistic add user message
         const userMsg = {
@@ -192,7 +270,16 @@ const useFinanceStore = create((set, get) => ({
         }));
 
         try {
-            const { data } = await api.post('/chat', { message });
+            const { data } = await api.sendChatMessage(message, activeChatRoomId);
+
+            // Update active room if we got one back
+            if (!activeChatRoomId && data.chatRoomId) {
+                set({ activeChatRoomId: data.chatRoomId });
+                // Refresh rooms list after title is generated
+                setTimeout(() => get().fetchChatRooms('AI_CHAT'), 1500);
+            } else {
+                setTimeout(() => get().fetchChatRooms('AI_CHAT'), 1500);
+            }
 
             const aiMsg = {
                 id: data.messageId,
@@ -211,10 +298,9 @@ const useFinanceStore = create((set, get) => ({
         } catch (error) {
             set({ chatLoading: false });
 
-            // Add error message
             const errMsg = {
                 id: (Date.now() + 1).toString(),
-                content: 'Sorry, I could not process your request. Please try again. 🙏',
+                content: 'Sorry, I could not process your request. Please try again.',
                 role: 'assistant',
                 createdAt: new Date().toISOString(),
             };
@@ -227,8 +313,8 @@ const useFinanceStore = create((set, get) => ({
         }
     },
 
-    clearChat: async () => {
-        await api.delete('/chat/history');
+    clearChat: async (roomId) => {
+        await api.clearChatHistory(roomId);
         set({ chatMessages: [] });
     },
 }));
