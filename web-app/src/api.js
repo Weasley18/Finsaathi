@@ -71,6 +71,27 @@ export const api = {
     getProfile: () => apiFetch('/users/profile'),
     updateProfile: (data) => apiFetch('/users/profile', { method: 'PUT', body: JSON.stringify(data) }),
     completeProfile: (data) => apiFetch('/auth/complete-profile', { method: 'POST', body: JSON.stringify(data) }),
+    uploadDocument: async (file, type) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('type', type);
+
+        const headers = {
+            ...(token && { Authorization: `Bearer ${token}` }),
+        };
+
+        const res = await fetch(`${BASE_URL}/documents/upload`, {
+            method: 'POST',
+            headers,
+            body: formData, // Do not set Content-Type header manually, let fetch handle the boundary
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || 'Upload failed');
+        }
+        return res.json();
+    },
 
     // Insights
     getHealthScore: () => apiFetch('/insights/health-score'),

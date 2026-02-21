@@ -1,9 +1,9 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
+import { prisma } from '../server';
 import { z } from 'zod';
-import { executeMCPTool, getToolDescriptionsForPrompt, getToolsForOllama } from '../services/mcp.js';
-import { getSystemPrompt, chatWithOllama, chatWithTools } from '../services/ollama.js';
-import { preProcessMessage, postProcessResponse, detectLanguage } from '../services/translation.js';
+import { executeMCPTool, getToolDescriptionsForPrompt, getToolsForOllama } from '../services/mcp';
+import { getSystemPrompt, chatWithOllama, chatWithTools } from '../services/ollama';
+import { preProcessMessage, postProcessResponse, detectLanguage } from '../services/translation';
 
 const chatSchema = z.object({
     message: z.string().min(1),

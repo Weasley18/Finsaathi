@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
+import { prisma } from '../server';
 import { z } from 'zod';
 import { categorizeTransaction, suggestCategory, CATEGORIES } from '../services/categorizer.js';
 import { chatWithOllama } from '../services/ollama.js';

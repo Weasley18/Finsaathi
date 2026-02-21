@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { chatWithOllama } from './ollama';
 
 // ─── Multilingual Translation Service ────────────────────────────
 // Uses IndicTrans2 (AI4Bharat) via Hugging Face Inference API for

@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
+import { prisma } from '../server';
 import { z } from 'zod';
-import { requireRole, requireOwnerOrRole, hasHigherOrEqualRole } from '../middleware/rbac.js';
+import { requireRole, requireOwnerOrRole, hasHigherOrEqualRole } from '../middleware/rbac';
 
 const updateUserSchema = z.object({
     name: z.string().optional(),

@@ -1,15 +1,15 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
+import { prisma } from '../server';
 import { z } from 'zod';
-import { requireRole, requireTier, requireApproval } from '../middleware/rbac.js';
-import { chatWithOllama } from '../services/ollama.js';
+import { requireRole, requireTier, requireApproval } from '../middleware/rbac';
+import { chatWithOllama } from '../services/ollama';
 import {
     indexAdvisorNote,
     indexAdvisorChatResponse,
     retrieveAdvisorKnowledge,
     buildCloneSystemPrompt,
     buildCoPilotSystemPrompt,
-} from '../services/advisorClone.js';
+} from '../services/advisorClone';
 
 const assignClientSchema = z.object({
     clientId: z.string(),
@@ -32,18 +32,34 @@ const chatSchema = z.object({
 export async function advisorRoutes(app: FastifyInstance) {
     app.addHook('preHandler', app.authenticate as any);
 
-    // ─── List All Advisors (Admin Only) ─────────────────────────
+    // ─── List All Advisors (User & Admin) ─────────────────────────
     app.get('/', {
-        preHandler: [requireRole('ADMIN')],
+        preHandler: [requireRole('ADMIN', 'END_USER')],
     }, async (request: any, reply) => {
+        const userRole = request.user.role;
+        const userId = request.user.userId;
+
+        // Base where clause: Active & Approved Advisors
+        const where: any = {
+            role: 'ADVISOR',
+            approvalStatus: 'APPROVED',
+            isActive: true
+        };
+
         const advisors = await prisma.user.findMany({
-            where: { role: 'ADVISOR' },
+            where,
             select: {
                 id: true,
                 name: true,
-                phone: true,
-                tier: true,
-                isActive: true,
+                phone: userRole === 'ADMIN' ? true : false, // Hide phone from END_USERs in listing
+                avatarUrl: true,
+                advisorProfile: {
+                    select: {
+                        highestQualification: true,
+                        feeModel: true,
+                        areasOfExpertise: true,
+                    }
+                },
                 _count: {
                     select: { advisorClients: true }
                 }
@@ -51,6 +67,48 @@ export async function advisorRoutes(app: FastifyInstance) {
             orderBy: { createdAt: 'desc' }
         });
 
+        // ─── Match Logic for END_USER ─────────────────────────
+        if (userRole === 'END_USER') {
+            const currentUser = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { areasOfInterest: true }
+            });
+
+            let userInterests: string[] = currentUser?.areasOfInterest || [];
+
+            // Map and calculate match scores
+            const scoredAdvisors = advisors.map(adv => {
+                let expertises: string[] = adv.advisorProfile?.areasOfExpertise || [];
+
+                // Calculate overlap
+                const overlap = userInterests.filter(interest => expertises.includes(interest)).length;
+                let matchScore = 0;
+
+                if (userInterests.length > 0) {
+                    // Match Score out of 100 based on percentage of interests covered
+                    matchScore = Math.round((overlap / userInterests.length) * 100);
+                } else {
+                    // If user has no interests specified, randomly assign a neutral score so they all mix
+                    matchScore = 50;
+                }
+
+                return {
+                    ...adv,
+                    parsedExpertise: expertises,
+                    matchScore
+                };
+            });
+
+            // Sort by highest match score first, then by least crowded
+            scoredAdvisors.sort((a, b) => {
+                if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
+                return a._count.advisorClients - b._count.advisorClients;
+            });
+
+            return reply.send({ advisors: scoredAdvisors });
+        }
+
+        // For ADMIN, just return regular list
         return reply.send({ advisors });
     });
 

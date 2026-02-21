@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
+import { prisma } from '../server';
 import { z } from 'zod';
 
 const sendOtpSchema = z.object({
@@ -16,9 +16,21 @@ const profileSchema = z.object({
     language: z.string().default('en'),
     incomeRange: z.enum(['BELOW_10K', 'FROM_10K_TO_25K', 'FROM_25K_TO_50K', 'FROM_50K_TO_1L', 'ABOVE_1L']).optional(),
     riskProfile: z.enum(['CONSERVATIVE', 'MODERATE', 'AGGRESSIVE']).optional(),
+    areasOfInterest: z.array(z.string()).optional(), // JSON parsed externally
     role: z.enum(['END_USER', 'ADVISOR', 'PARTNER']).optional(),
-    tier: z.enum(['FREE', 'PREMIUM']).optional(),
-    businessId: z.string().optional()
+    businessId: z.string().optional(),
+
+    // Advisor Profile Fields
+    businessAddress: z.string().optional(),
+    professionalEmail: z.string().email().optional(),
+    sebiCertificateIssueDate: z.string().optional(), // ISO String
+    sebiCertificateExpiryDate: z.string().optional(), // ISO String
+    baslMembershipId: z.string().optional(),
+    highestQualification: z.string().optional(),
+    optionalCertifications: z.array(z.string()).optional(),
+    languagesSpoken: z.array(z.string()).optional(),
+    areasOfExpertise: z.array(z.string()).optional(),
+    feeModel: z.enum(['NGO_SUBSIDIZED', 'CSR_FUNDED', 'FLAT_FEE', 'B2B_SPONSORED']).optional()
 });
 
 export async function authRoutes(app: FastifyInstance) {
@@ -108,7 +120,14 @@ export async function authRoutes(app: FastifyInstance) {
     app.post('/complete-profile', {
         preHandler: [app.authenticate as any],
     }, async (request: any, reply) => {
-        const { role, tier, businessId, ...data } = profileSchema.parse(request.body);
+        const {
+            role, businessId, areasOfInterest,
+            businessAddress, professionalEmail,
+            sebiCertificateIssueDate, sebiCertificateExpiryDate,
+            baslMembershipId, highestQualification,
+            optionalCertifications, languagesSpoken, areasOfExpertise, feeModel,
+            ...data
+        } = profileSchema.parse(request.body);
         const userId = request.user.userId;
 
         let approvalStatus: 'APPROVED' | 'PENDING' | 'REJECTED' | 'SUSPENDED' = 'APPROVED';
@@ -121,11 +140,31 @@ export async function authRoutes(app: FastifyInstance) {
             data: {
                 ...data,
                 ...(role && { role }),
-                ...(tier && { tier }),
-                ...(businessId && { businessId }),
+                ...(areasOfInterest && { areasOfInterest }),
                 approvalStatus,
             },
         });
+
+        // Create AdvisorProfile if the role is ADVISOR
+        if (role === 'ADVISOR' && businessAddress && professionalEmail && baslMembershipId && highestQualification && feeModel && sebiCertificateIssueDate && sebiCertificateExpiryDate) {
+            await prisma.advisorProfile.upsert({
+                where: { userId },
+                update: {},
+                create: {
+                    userId,
+                    businessAddress,
+                    professionalEmail,
+                    sebiCertificateIssueDate: new Date(sebiCertificateIssueDate),
+                    sebiCertificateExpiryDate: new Date(sebiCertificateExpiryDate),
+                    baslMembershipId,
+                    highestQualification,
+                    feeModel,
+                    optionalCertifications: optionalCertifications || [],
+                    languagesSpoken: languagesSpoken || [],
+                    areasOfExpertise: areasOfExpertise || [],
+                }
+            })
+        }
 
         // Create initial financial profile
         await prisma.financialProfile.upsert({
