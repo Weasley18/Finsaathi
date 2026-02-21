@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { setApiToken } from '../services/api';
+import i18n from '../i18n';
 
 const useAuthStore = create(
     persist(
@@ -37,6 +38,10 @@ const useAuthStore = create(
                     });
                     // Set token for future requests
                     setApiToken(data.token);
+                    // Sync i18n language with user preference
+                    if (data.user?.language) {
+                        i18n.changeLanguage(data.user.language);
+                    }
                     return data;
                 } catch (error) {
                     set({ isLoading: false });
@@ -92,6 +97,10 @@ const useAuthStore = create(
             onRehydrateStorage: () => (state) => {
                 if (state?.token) {
                     setApiToken(state.token);
+                }
+                // Sync i18n with stored user language on app restart
+                if (state?.user?.language) {
+                    i18n.changeLanguage(state.user.language);
                 }
             },
         }

@@ -53,7 +53,16 @@ export async function userRoutes(app: FastifyInstance) {
             data,
         });
 
-        return reply.send({ success: true, user });
+        // Re-issue JWT if language changed (so chat route picks up new language)
+        let token: string | undefined;
+        if (data.language) {
+            token = app.jwt.sign(
+                { userId: user.id, phone: user.phone, role: user.role, approvalStatus: user.approvalStatus, language: user.language || 'en' },
+                { expiresIn: '30d' }
+            );
+        }
+
+        return reply.send({ success: true, user, ...(token && { token }) });
     });
 
     // ─── Get Dashboard Summary (own data) ────────────────────────

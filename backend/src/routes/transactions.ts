@@ -78,6 +78,57 @@ If you cannot determine a field, make your best guess or omit it. But "amount" a
         }
     });
 
+    // ─── SMS Parsing ─────────────────────────────────────────────
+    // Parses raw bank SMS text into transaction data using Regex
+    app.post('/parse-sms', async (request: any, reply) => {
+        const { text } = z.object({ text: z.string() }).parse(request.body);
+
+        // Common Indian Bank SMS Regex Patterns
+        const amountRegex = /(?:Rs\.?|INR)\s*([\d,]+(?:\.\d{1,2})?)/i;
+        const debitedRegex = /debited|deducted|spent|paid/i;
+        const creditedRegex = /credited|deposited|received/i;
+        const merchantRegex = /(?:vpa|to|at|info)\s*[:-]?\s*([a-zA-Z0-9.\s]+?)(?=\s*(?:on|ref|upi|avl|\.|$))/i;
+
+        let amount = 0;
+        let type: 'INCOME' | 'EXPENSE' = 'EXPENSE';
+        let merchant = 'Unknown Merchant';
+        let success = false;
+
+        const amountMatch = text.match(amountRegex);
+        if (amountMatch) {
+            amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+            success = true;
+        }
+
+        if (creditedRegex.test(text) && !debitedRegex.test(text)) {
+            type = 'INCOME';
+        }
+
+        const merchantMatch = text.match(merchantRegex);
+        if (merchantMatch && merchantMatch[1]) {
+            merchant = merchantMatch[1].trim();
+        }
+
+        // Auto-categorize if we got the merchant
+        const category = suggestCategory(text, merchant).category;
+
+        if (success) {
+            return reply.send({
+                success: true,
+                parsedData: {
+                    amount,
+                    type,
+                    merchant,
+                    category,
+                    description: text.substring(0, 50) + '...', // Save snippet of SMS
+                    source: 'SMS'
+                }
+            });
+        }
+
+        return reply.status(400).send({ success: false, error: 'Could not parse SMS format' });
+    });
+
     // ─── Create Transaction ──────────────────────────────────────
     app.post('/', async (request: any, reply) => {
         const data = createTransactionSchema.parse(request.body);

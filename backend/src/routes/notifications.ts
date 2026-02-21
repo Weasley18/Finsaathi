@@ -1,8 +1,11 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server';
+import { prisma } from '../server.js';
+import { createTranslationHook } from '../middleware/translate.js';
 
 export async function notificationRoutes(app: FastifyInstance) {
     app.addHook('preHandler', app.authenticate as any);
+    // Translate notification text to user's language
+    app.addHook('onSend', createTranslationHook({ fields: ['title', 'message', 'body'] }));
 
     // ─── List Notifications ─────────────────────────────────────
     app.get('/', async (request: any, reply) => {

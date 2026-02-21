@@ -68,9 +68,9 @@ export async function partnerRoutes(app: FastifyInstance) {
             _count: true,
         });
 
-        // Only return groups with ≥ 50 users for k-anonymity
-        const kAnonymized = incomeDistribution
-            .filter(g => g._count >= 10) // relaxed to 10 for hackathon demo
+        // Only return groups with ≥ 50 users (K-Anonymity)
+        const kAnonymizedIncome = incomeDistribution
+            .filter(g => g._count >= 50)
             .map(g => ({
                 incomeRange: g.incomeRange || 'Unknown',
                 userCount: g._count,
@@ -83,6 +83,14 @@ export async function partnerRoutes(app: FastifyInstance) {
             _count: true,
         });
 
+        // K-Anonymity for Risk Profile (K>=50)
+        const kAnonymizedRisk = riskDistribution
+            .filter(r => r._count >= 50)
+            .map(r => ({
+                riskProfile: r.riskProfile || 'Unknown',
+                userCount: r._count,
+            }));
+
         // Product uptake funnel for this partner
         const partnerId = request.user.userId;
         const funnel = await Promise.all([
@@ -92,16 +100,18 @@ export async function partnerRoutes(app: FastifyInstance) {
         ]);
 
         return reply.send({
-            incomeDistribution: kAnonymized,
-            riskDistribution: riskDistribution.map(r => ({
-                riskProfile: r.riskProfile || 'Unknown',
-                userCount: r._count,
-            })),
+            incomeDistribution: kAnonymizedIncome,
+            riskDistribution: kAnonymizedRisk,
             uptakeFunnel: {
                 matched: funnel[0],
                 applied: funnel[1],
                 onboarded: funnel[2],
             },
+            privacy: {
+                standard: 'K-Anonymity',
+                kValue: 50,
+                message: 'Data is aggregated and groups with fewer than 50 users are hidden to protect individual privacy.'
+            }
         });
     });
 

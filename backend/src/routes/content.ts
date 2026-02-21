@@ -1,7 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
 import { z } from 'zod';
-import { requireRole } from '../middleware/rbac';
+import { requireRole } from '../middleware/rbac.js';
+import { createTranslationHook } from '../middleware/translate.js';
 
 const lessonSchema = z.object({
     title: z.string().min(3),
@@ -25,6 +26,8 @@ const schemeSchema = z.object({
 export async function contentRoutes(app: FastifyInstance) {
     // Public Access (or Auth Only) ──────────────────────────────
     // Anyone authenticated can view content
+    // Translate lesson/scheme text to user's language
+    app.addHook('onSend', createTranslationHook({ fields: ['title', 'description', 'content', 'name', 'eligibility', 'benefits'] }));
 
     app.get('/lessons', {
         preHandler: [(app as any).authenticate],

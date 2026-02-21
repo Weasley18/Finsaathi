@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from 'recharts';
 import { TrendingUp, TrendingDown, Wallet, Target, PiggyBank, Activity } from 'lucide-react';
@@ -6,6 +7,7 @@ import { TrendingUp, TrendingDown, Wallet, Target, PiggyBank, Activity } from 'l
 const COLORS = ['#ba8f0d', '#D4AF37', '#ff9f43', '#54a0ff', '#4caf50', '#e74c3c', '#a55eea', '#e84393'];
 
 export default function UserDashboard() {
+    const { t } = useTranslation();
     const [dashboard, setDashboard] = useState(null);
     const [categoryData, setCategoryData] = useState([]);
     const [monthlyTrend, setMonthlyTrend] = useState([]);
@@ -24,7 +26,7 @@ export default function UserDashboard() {
         });
     }, []);
 
-    if (loading) return <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>Loading dashboard...</div>;
+    if (loading) return <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>{t('common.loading')}</div>;
 
     const summary = dashboard?.summary || {};
     const recentTxns = dashboard?.recentTransactions || [];
@@ -33,31 +35,31 @@ export default function UserDashboard() {
     return (
         <div>
             <div className="page-header">
-                <h2>Dashboard</h2>
-                <p>Welcome back, {dashboard?.user?.name || 'User'}</p>
+                <h2>{t('dashboard.title')}</h2>
+                <p>{t('dashboard.welcomeBack', { name: dashboard?.user?.name || 'User' })}</p>
             </div>
 
             {/* Stats */}
             <div className="stats-grid">
                 <div className="glass-card stat-card fade-in-up delay-1">
-                    <div className="label">Total Income</div>
+                    <div className="label">{t('dashboard.totalIncome')}</div>
                     <div className="value" style={{ color: 'var(--success)' }}>₹{(summary.totalIncome || 0).toLocaleString('en-IN')}</div>
-                    <div className="trend"><TrendingUp size={14} /> This month</div>
+                    <div className="trend"><TrendingUp size={14} /> {t('dashboard.thisMonth')}</div>
                 </div>
                 <div className="glass-card stat-card fade-in-up delay-2">
-                    <div className="label">Total Expenses</div>
+                    <div className="label">{t('dashboard.totalExpenses')}</div>
                     <div className="value" style={{ color: 'var(--error)' }}>₹{(summary.totalExpenses || 0).toLocaleString('en-IN')}</div>
-                    <div className="trend negative"><TrendingDown size={14} /> This month</div>
+                    <div className="trend negative"><TrendingDown size={14} /> {t('dashboard.thisMonth')}</div>
                 </div>
                 <div className="glass-card stat-card fade-in-up delay-3">
-                    <div className="label">Savings</div>
+                    <div className="label">{t('dashboard.savings')}</div>
                     <div className="value" style={{ color: 'var(--accent-light)' }}>₹{(summary.savings || 0).toLocaleString('en-IN')}</div>
-                    <div className="trend"><PiggyBank size={14} /> Net</div>
+                    <div className="trend"><PiggyBank size={14} /> {t('dashboard.net')}</div>
                 </div>
                 <div className="glass-card stat-card fade-in-up delay-4">
-                    <div className="label">Health Score</div>
+                    <div className="label">{t('dashboard.healthScore')}</div>
                     <div className="value" style={{ color: 'var(--bright-gold)' }}>{summary.healthScore || '—'}/100</div>
-                    <div className="trend"><Activity size={14} /> Score</div>
+                    <div className="trend"><Activity size={14} /> {t('dashboard.score')}</div>
                 </div>
             </div>
 
@@ -65,7 +67,7 @@ export default function UserDashboard() {
             <div className="two-col-grid">
                 {/* Spending by Category */}
                 <div className="glass-card chart-container fade-in-up">
-                    <h3 className="section-title">Spending by Category</h3>
+                    <h3 className="section-title">{t('dashboard.spendingByCategory')}</h3>
                     {categoryData.length > 0 ? (
                         <ResponsiveContainer width="100%" height={250}>
                             <PieChart>
@@ -104,7 +106,7 @@ export default function UserDashboard() {
 
                 {/* Monthly Trend */}
                 <div className="glass-card chart-container fade-in-up">
-                    <h3 className="section-title">Monthly Trend</h3>
+                    <h3 className="section-title">{t('dashboard.monthlyTrend')}</h3>
                     {monthlyTrend.length > 0 ? (
                         <ResponsiveContainer width="100%" height={250}>
                             <LineChart data={monthlyTrend}>
@@ -127,7 +129,7 @@ export default function UserDashboard() {
             {/* Goals */}
             {goals.length > 0 && (
                 <div className="fade-in-up" style={{ marginBottom: 32 }}>
-                    <h3 className="section-title">🎯 Savings Goals</h3>
+                    <h3 className="section-title">{t('dashboard.savingsGoals')}</h3>
                     <div className="stats-grid">
                         {goals.map(g => {
                             const progress = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount * 100) : 0;
@@ -152,14 +154,14 @@ export default function UserDashboard() {
 
             {/* Recent Transactions */}
             <div className="glass-card fade-in-up">
-                <h3 className="section-title">Recent Transactions</h3>
+                <h3 className="section-title">{t('dashboard.recentTransactions')}</h3>
                 <table className="data-table">
                     <thead>
                         <tr>
-                            <th>Description</th>
-                            <th>Category</th>
-                            <th>Date</th>
-                            <th>Amount</th>
+                            <th>{t('dashboard.description')}</th>
+                            <th>{t('dashboard.category')}</th>
+                            <th>{t('dashboard.date')}</th>
+                            <th>{t('dashboard.amount')}</th>
                         </tr>
                     </thead>
                     <tbody>

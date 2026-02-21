@@ -7,8 +7,10 @@ import { StatusBar } from 'expo-status-bar';
 import BottomNav from '../components/BottomNav';
 import useFinanceStore from '../store/financeStore';
 import { colors, gradients, glassmorphism } from '../theme';
+import { useTranslation } from 'react-i18next';
 
 export default function FinancialInsights({ navigation }) {
+  const { t } = useTranslation();
   const { healthScore, lessons, fetchHealthScore, fetchLessons } = useFinanceStore();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -57,7 +59,7 @@ export default function FinancialInsights({ navigation }) {
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
               <ArrowLeft size={24} color={colors.textPrimary} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Financial Insights</Text>
+            <Text style={styles.headerTitle}>{t('insights.title')}</Text>
             <View style={{ width: 40 }} />
           </View>
 
@@ -65,7 +67,7 @@ export default function FinancialInsights({ navigation }) {
           <LinearGradient colors={gradients.surfaceCard} style={[styles.scoreCard, glassmorphism.cardElevated]}>
             <View style={styles.scoreHeader}>
               <Activity size={20} color={colors.accent} />
-              <Text style={styles.scoreLabel}>Financial Health Score</Text>
+              <Text style={styles.scoreLabel}>{t('insights.healthScore')}</Text>
             </View>
 
             <View style={styles.scoreCircle}>
