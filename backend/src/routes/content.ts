@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
+import { prisma } from '../server';
 import { z } from 'zod';
-import { requireRole } from '../middleware/rbac.js';
+import { requireRole } from '../middleware/rbac';
 
 const lessonSchema = z.object({
     title: z.string().min(3),

@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
-import { indexDocument, deleteDocumentIndex } from '../services/chroma.js';
+import { prisma } from '../server';
+import { indexDocument, deleteDocumentIndex } from '../services/chroma';
 
 export async function documentRoutes(app: FastifyInstance) {
     app.addHook('preHandler', app.authenticate as any);

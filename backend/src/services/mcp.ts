@@ -1,5 +1,5 @@
-import { prisma } from '../server.js';
-import { queryDocuments } from './chroma.js';
+import { prisma } from '../server';
+import { queryDocuments } from './chroma';
 
 // ─── MCP Tool Definitions ────────────────────────────────────────
 // These are the structured tool calls the LLM can make to retrieve

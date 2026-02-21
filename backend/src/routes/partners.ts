@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
-import { requireRole, requireApproval } from '../middleware/rbac.js';
+import { prisma } from '../server';
+import { requireRole, requireApproval } from '../middleware/rbac';
 
 export async function partnerRoutes(app: FastifyInstance) {
     app.addHook('preHandler', (app as any).authenticate);

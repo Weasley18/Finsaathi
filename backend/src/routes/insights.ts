@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
+import { prisma } from '../server';
 
 export async function insightRoutes(app: FastifyInstance) {
     app.addHook('preHandler', app.authenticate as any);

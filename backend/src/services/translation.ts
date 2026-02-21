@@ -1,4 +1,4 @@
-import { chatWithOllama } from './ollama.js';
+import { chatWithOllama } from './ollama';
 
 // ─── Multilingual Translation Service ────────────────────────────
 // Uses Ollama LLM to translate between Indian languages and English.
