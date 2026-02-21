@@ -34,6 +34,10 @@ export default function OnboardingPage() {
     });
 
     // Advisor Fields
+    const [dob, setDob] = useState('');
+    const [panNumber, setPanNumber] = useState('');
+    const [userPanDoc, setUserPanDoc] = useState(null);
+
     const [businessAddress, setBusinessAddress] = useState('');
     const [professionalEmail, setProfessionalEmail] = useState('');
     const [sebiCertificateIssueDate, setSebiCertificateIssueDate] = useState('');
@@ -63,6 +67,31 @@ export default function OnboardingPage() {
         setLoading(true);
         setError('');
 
+        if (role === 'END_USER') {
+            if (!dob) {
+                setError('Date of Birth is required.');
+                setLoading(false);
+                return;
+            }
+            const birthDate = new Date(dob);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            if (age < 18) {
+                setError('You must be at least 18 years old to create an account.');
+                setLoading(false);
+                return;
+            }
+            if (!panNumber || !userPanDoc) {
+                setError('PAN Number and PAN Document are required.');
+                setLoading(false);
+                return;
+            }
+        }
+
         try {
             // Upload documents first if Advisor
             if (role === 'ADVISOR') {
@@ -90,13 +119,19 @@ export default function OnboardingPage() {
                 await api.uploadDocument(partnerDoc, 'partner_legal_doc');
             }
 
+            if (role === 'END_USER' && userPanDoc) {
+                await api.uploadDocument(userPanDoc, 'user_pan');
+            }
+
             const payload = {
                 name,
                 role,
                 ...(role === 'END_USER' ? {
                     incomeRange: income,
                     riskProfile: goal,
-                    areasOfInterest
+                    areasOfInterest,
+                    dob,
+                    panNumber
                 } : {}),
                 ...((role === 'ADVISOR' || role === 'PARTNER') ? { businessId } : {}),
                 ...(role === 'ADVISOR' ? {
@@ -182,6 +217,37 @@ export default function OnboardingPage() {
 
                         {role === 'END_USER' && (
                             <>
+                                <div style={styles.inputGroup}>
+                                    <label style={styles.label}>Date of Birth</label>
+                                    <input
+                                        type="date"
+                                        className="input"
+                                        value={dob}
+                                        onChange={e => setDob(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div style={styles.inputGroup}>
+                                    <label style={styles.label}>PAN Number</label>
+                                    <input
+                                        className="input"
+                                        value={panNumber}
+                                        onChange={e => setPanNumber(e.target.value.toUpperCase())}
+                                        placeholder="ABCDE1234F"
+                                        maxLength={10}
+                                        required
+                                    />
+                                </div>
+                                <div style={styles.inputGroup}>
+                                    <label style={styles.label}>Upload PAN Card Document</label>
+                                    <input
+                                        type="file"
+                                        className="input"
+                                        onChange={e => setUserPanDoc(e.target.files[0])}
+                                        required
+                                        style={{ padding: '8px' }}
+                                    />
+                                </div>
                                 <div style={styles.inputGroup}>
                                     <label style={styles.label}>{t('onboarding.monthlyIncome')}</label>
                                     <select className="input" value={income} onChange={e => setIncome(e.target.value)} style={styles.select}>
