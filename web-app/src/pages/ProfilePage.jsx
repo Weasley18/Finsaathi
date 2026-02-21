@@ -178,7 +178,7 @@ export default function ProfilePage() {
                         }}>
                             <div style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text-muted)', marginBottom: 8 }}>{t('profile.healthScoreLabel')}</div>
                             <div style={{ fontSize: 42, fontWeight: 800, color: 'var(--bright-gold)' }}>
-                                {user?.financialProfile?.healthScore || 50}
+                                {user?.financialProfile?.healthScore ?? '—'}
                             </div>
                             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('profile.outOf100')}</div>
                         </div>

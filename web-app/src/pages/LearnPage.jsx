@@ -35,18 +35,7 @@ export default function LearnPage() {
             .catch(() => { });
     }, []);
 
-    const demoLessons = [
-        { id: 1, title: 'What is Inflation?', description: 'Understanding how prices increase over time and how it affects your savings.', duration: '3 min', category: 'Basics', difficulty: 'Beginner' },
-        { id: 2, title: 'How Does EMI Work?', description: 'Learn how Equated Monthly Installments break down your loan payments.', duration: '3 min', category: 'Loans', difficulty: 'Beginner' },
-        { id: 3, title: 'Understanding CIBIL Score', description: 'Your credit score impacts your ability to get loans. Learn how it works.', duration: '4 min', category: 'Credit', difficulty: 'Beginner' },
-        { id: 4, title: 'SIP vs Lump Sum Investment', description: 'Which investment strategy works better for you?', duration: '3 min', category: 'Investment', difficulty: 'Intermediate' },
-        { id: 5, title: 'The 50/30/20 Budget Rule', description: 'A simple budgeting framework that works for every income level.', duration: '2 min', category: 'Budgeting', difficulty: 'Beginner' },
-        { id: 6, title: 'Emergency Fund 101', description: 'Why you need 3-6 months of expenses saved and how to build it.', duration: '3 min', category: 'Savings', difficulty: 'Beginner' },
-        { id: 7, title: 'Tax Saving Under Section 80C', description: 'Save up to ₹1.5 lakh on taxes with these investment options.', duration: '4 min', category: 'Tax', difficulty: 'Intermediate' },
-        { id: 8, title: 'UPI Fraud Prevention', description: 'Protect yourself from common UPI scams and frauds.', duration: '3 min', category: 'Security', difficulty: 'Beginner' },
-    ];
-
-    const displayLessons = lessons.length > 0 ? lessons : demoLessons;
+    const displayLessons = lessons;
     const categories = ['All', ...new Set(displayLessons.map(l => l.category))];
     const filtered = activeCategory === 'All' ? displayLessons : displayLessons.filter(l => l.category === activeCategory);
 
@@ -80,6 +69,12 @@ export default function LearnPage() {
             </div>
 
             {/* Lessons grid */}
+            {filtered.length === 0 ? (
+                <div className="glass-card" style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <GraduationCap size={40} style={{ marginBottom: 12, opacity: 0.4 }} />
+                    <p>No lessons available yet.</p>
+                </div>
+            ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
                 {filtered.map(lesson => {
                     const Icon = CATEGORY_ICONS[lesson.category] || BookOpen;
@@ -130,6 +125,7 @@ export default function LearnPage() {
                     );
                 })}
             </div>
+            )}
         </div>
     );
 }

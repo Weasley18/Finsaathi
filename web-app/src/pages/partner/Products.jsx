@@ -158,13 +158,7 @@ export default function Products() {
             const data = await api.getPartnerProducts();
             setProducts(data.products || []);
         } catch {
-            // Use demo data for hackathon
-            setProducts([
-                { id: '1', name: 'Micro Business Loan', description: 'Collateral-free loans for small businesses up to ₹10L', type: 'microloan', interestRate: 9.5, minAmount: 10000, maxAmount: 1000000, isActive: true, totalMatches: 145, createdAt: new Date().toISOString() },
-                { id: '2', name: 'Crop Insurance Basic', description: 'Weather-indexed crop insurance for Rabi & Kharif seasons', type: 'insurance', interestRate: null, minAmount: 500, maxAmount: 50000, isActive: true, totalMatches: 89, createdAt: new Date().toISOString() },
-                { id: '3', name: 'Jan Dhan Plus Savings', description: 'Zero-balance savings account with RuPay debit card', type: 'savings_account', interestRate: 4.0, minAmount: 0, maxAmount: null, isActive: true, totalMatches: 234, createdAt: new Date().toISOString() },
-                { id: '4', name: 'PMMY Mudra Shishu', description: 'Micro-enterprise loans under Mudra Yojana (Shishu category)', type: 'scheme', interestRate: 7.5, minAmount: 5000, maxAmount: 50000, isActive: false, totalMatches: 67, createdAt: new Date().toISOString() },
-            ]);
+            setProducts([]);
         } finally {
             setLoading(false);
         }

@@ -84,15 +84,8 @@ export default function ClientHealth() {
     const [showCallModal, setShowCallModal] = useState(false);
     const [showFlagModal, setShowFlagModal] = useState(false);
 
-    // Mock data for charts
-    const trendData = [
-        { month: 'Jan', income: 12000, expense: 8000 },
-        { month: 'Feb', income: 12500, expense: 9500 },
-        { month: 'Mar', income: 12000, expense: 7800 },
-        { month: 'Apr', income: 13000, expense: 11000 },
-        { month: 'May', income: 15000, expense: 9000 },
-        { month: 'Jun', income: 14500, expense: 8500 }, // Current
-    ];
+    const [trendData, setTrendData] = useState([]);
+    const [clientGoals, setClientGoals] = useState([]);
 
     useEffect(() => {
         loadClientData();
@@ -102,6 +95,11 @@ export default function ClientHealth() {
         try {
             const res = await api.getUserById(id);
             setClient(res.user);
+            // Load client goals
+            try {
+                const goalsRes = await api.getGoals?.() || { goals: [] };
+                setClientGoals(goalsRes.goals || []);
+            } catch { setClientGoals([]); }
         } catch (err) {
             console.error("Failed to load client", err);
         } finally {
@@ -137,7 +135,8 @@ export default function ClientHealth() {
     if (loading) return <div style={{ padding: 40, color: 'var(--text-muted)' }}>Loading...</div>;
     if (!client) return <div style={{ padding: 40 }}>Client not found</div>;
 
-    const healthScore = client.financialProfile?.healthScore || 65; // Fallback mock
+    const healthScore = client.financialProfile?.healthScore;
+    const hasHealthScore = healthScore != null;
 
     return (
         <div style={{ paddingBottom: 80 }}> {/* Padding for fixed bottom bar if needed */}
@@ -168,12 +167,16 @@ export default function ClientHealth() {
                                 <Phone size={14} /> {client.phone}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Calendar size={14} /> Member since Mar 2024
+                                <Calendar size={14} /> Member since {client.createdAt ? new Date(client.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'N/A'}
                             </div>
                         </div>
                     </div>
 
-                    <HealthRing score={healthScore} />
+                    {hasHealthScore ? <HealthRing score={healthScore} /> : (
+                        <div style={{ width: 120, height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', border: '3px dashed var(--text-muted)', opacity: 0.5 }}>
+                            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No score</div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -182,16 +185,20 @@ export default function ClientHealth() {
                 {/* ─── Financial Health Breakdown ─── */}
                 <div className="glass-card">
                     <h3 className="section-title">Health Breakdown</h3>
-                    <ProgressBar label="Savings Rate" value={45} color="var(--warning)" />
-                    <ProgressBar label="Spending Discipline" value={72} color="var(--success)" />
-                    <ProgressBar label="Goal Progress" value={55} color="var(--accent)" />
-                    <ProgressBar label="Budget Adherence" value={80} color="var(--success)" />
-                    <ProgressBar label="Emergency Fund" value={30} color="var(--error)" />
+                    {hasHealthScore ? (
+                        <>
+                            <ProgressBar label="Savings Rate" value={Math.round(client.financialProfile?.savingsRate || 0)} color={client.financialProfile?.savingsRate >= 20 ? 'var(--success)' : 'var(--warning)'} />
+                            <ProgressBar label="Overall Health" value={healthScore} color={healthScore >= 70 ? 'var(--success)' : healthScore >= 40 ? 'var(--accent)' : 'var(--error)'} />
+                        </>
+                    ) : (
+                        <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>No health data available for this client</div>
+                    )}
                 </div>
 
                 {/* ─── Monthly Trends Chart ─── */}
                 <div className="glass-card">
                     <h3 className="section-title">Income vs Expenses</h3>
+                    {trendData.length > 0 ? (
                     <div style={{ height: 200, width: '100%' }}>
                         <ResponsiveContainer>
                             <LineChart data={trendData}>
@@ -206,17 +213,24 @@ export default function ClientHealth() {
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
+                    ) : (
+                        <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>No trend data available</div>
+                    )}
                 </div>
 
             </div>
 
             {/* ─── Active Goals ─── */}
             <h3 className="section-title">Active Goals</h3>
-            <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-                <GoalCard name="Emergency Fund" current={25000} target={100000} icon="🛡️" />
-                <GoalCard name="Wedding Savings" current={200000} target={500000} icon="💍" />
-                <GoalCard name="New Bike" current={30000} target={80000} icon="🏍️" />
-            </div>
+            {clientGoals.length > 0 ? (
+                <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                    {clientGoals.map((g, i) => (
+                        <GoalCard key={g.id || i} name={g.name} current={g.currentAmount || 0} target={g.targetAmount || 1} icon="🎯" />
+                    ))}
+                </div>
+            ) : (
+                <div className="glass-card" style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>No active goals for this client</div>
+            )}
 
             <div className="two-col-grid" style={{ marginTop: 24 }}>
                 {/* ─── Advisor Notes ─── */}

@@ -110,7 +110,7 @@ export async function userRoutes(app: FastifyInstance) {
                 totalExpenses: monthlyExpenses._sum.amount || 0,
                 totalIncome: monthlyIncome._sum.amount || 0,
                 savings: (monthlyIncome._sum.amount || 0) - (monthlyExpenses._sum.amount || 0),
-                healthScore: profile?.healthScore || 50,
+                healthScore: profile?.healthScore ?? null,
             },
             goals,
             recentTransactions,

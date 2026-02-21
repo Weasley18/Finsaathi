@@ -41,67 +41,97 @@ export async function insightRoutes(app: FastifyInstance) {
         const totalIncome = income._sum.amount || 0;
         const totalExpense = expenses._sum.amount || 0;
         const lastMonthTotal = lastMonthExpenses._sum.amount || 0;
+
+        // ─── Check if user has ANY financial data ────────────────
+        const hasTransactions = totalIncome > 0 || totalExpense > 0 || lastMonthTotal > 0 || threeMonthTxns.length > 0;
+        const hasGoals = goals.length > 0;
+        const hasBudgets = budgets.length > 0;
+        const hasAnyData = hasTransactions || hasGoals || hasBudgets;
+
+        if (!hasAnyData) {
+            return reply.send({
+                dataAvailable: false,
+                healthScore: null,
+                grade: null,
+                gradeDescription: 'No financial data available yet. Start by adding your income, expenses, or setting a savings goal!',
+                model: 'XGBoost-v2 (6-factor weighted ensemble)',
+                featureAttribution: {
+                    savingsRate: { score: null, weight: '25%', value: 'No data', status: 'no_data', insight: 'Add your income and expense transactions to calculate your savings rate.' },
+                    goalProgress: { score: null, weight: '20%', value: 'No data', status: 'no_data', insight: 'Set your first goal! ₹500/month emergency fund is a great start.' },
+                    budgetDiscipline: { score: null, weight: '20%', value: 'No data', status: 'no_data', insight: 'Create budgets for Food, Transport & Shopping to track spending.' },
+                    debtToIncome: { score: null, weight: '15%', value: 'No data', status: 'no_data', insight: 'Add your income transactions to calculate your debt-to-income ratio.' },
+                    emergencyFund: { score: null, weight: '10%', value: 'No data', status: 'no_data', insight: 'Create an emergency fund goal to start tracking.' },
+                    spendingConsistency: { score: null, weight: '10%', value: 'No data', status: 'no_data', insight: 'Add expense transactions to track your spending consistency.' },
+                },
+                tips: [
+                    'Start by adding your monthly income. 💰',
+                    'Log your daily expenses to understand spending patterns. 📊',
+                    'Set up a savings goal — even ₹500/month is a great start! 🎯',
+                ],
+                trend: { spendingVsLastMonth: 'N/A', direction: 'same' },
+            });
+        }
+
         const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0;
 
         // ─── Feature 1: Savings Rate Score (weight: 25%) ─────────
-        let savingsScore: number;
-        if (savingsRate >= 30) savingsScore = 100;
-        else if (savingsRate >= 20) savingsScore = 85;
-        else if (savingsRate >= 10) savingsScore = 65;
-        else if (savingsRate >= 0) savingsScore = 40;
-        else savingsScore = 10; // negative savings
+        let savingsScore: number | null = null;
+        if (hasTransactions && totalIncome > 0) {
+            if (savingsRate >= 30) savingsScore = 100;
+            else if (savingsRate >= 20) savingsScore = 85;
+            else if (savingsRate >= 10) savingsScore = 65;
+            else if (savingsRate >= 0) savingsScore = 40;
+            else savingsScore = 10; // negative savings
+        }
 
         // ─── Feature 2: Goal Progress Score (weight: 20%) ────────
-        let goalScore: number;
-        if (goals.length === 0) {
-            goalScore = 30; // no goals = low score
-        } else {
+        let goalScore: number | null = null;
+        if (hasGoals) {
             const avgProgress = goals.reduce((sum, g) => sum + Math.min(g.currentAmount / g.targetAmount, 1), 0) / goals.length;
             goalScore = Math.round(avgProgress * 100);
         }
 
         // ─── Feature 3: Budget Discipline (weight: 20%) ──────────
-        let budgetScore: number;
-        if (budgets.length === 0) {
-            budgetScore = 25;
-        } else {
-            // Check if expenses within budget categories are under limit
-            budgetScore = 75; // giving default adherence since budget tracking exists
+        let budgetScore: number | null = null;
+        if (hasBudgets) {
+            budgetScore = 75; // default adherence since budget tracking exists
         }
 
         // ─── Feature 4: Debt-to-Income Ratio (weight: 15%) ──────
-        // Estimate from EMI transactions
         const emiTransactions = threeMonthTxns.filter(t => t.category === 'EMI' || t.category === 'emi');
         const monthlyEMI = emiTransactions.length > 0
             ? emiTransactions.reduce((s, t) => s + t.amount, 0) / 3
             : 0;
         const dtiRatio = totalIncome > 0 ? (monthlyEMI / totalIncome) * 100 : 0;
-        let dtiScore: number;
-        if (dtiRatio === 0) dtiScore = 90;
-        else if (dtiRatio < 20) dtiScore = 80;
-        else if (dtiRatio < 40) dtiScore = 60;
-        else if (dtiRatio < 60) dtiScore = 35;
-        else dtiScore = 15;
+        let dtiScore: number | null = null;
+        if (hasTransactions && totalIncome > 0) {
+            if (dtiRatio === 0) dtiScore = 90;
+            else if (dtiRatio < 20) dtiScore = 80;
+            else if (dtiRatio < 40) dtiScore = 60;
+            else if (dtiRatio < 60) dtiScore = 35;
+            else dtiScore = 15;
+        }
 
         // ─── Feature 5: Emergency Fund (weight: 10%) ─────────────
         const emergencyGoal = goals.find(g => g.name?.toLowerCase().includes('emergency'));
-        let emergencyScore: number;
+        let emergencyScore: number | null = null;
         if (emergencyGoal) {
             const progress = emergencyGoal.currentAmount / emergencyGoal.targetAmount;
             emergencyScore = Math.min(Math.round(progress * 100), 100);
-        } else {
-            emergencyScore = 20;
         }
 
         // ─── Feature 6: Spending Consistency (weight: 10%) ───────
-        const spendingChange = lastMonthTotal > 0 ? Math.abs((totalExpense - lastMonthTotal) / lastMonthTotal) * 100 : 0;
-        let consistencyScore: number;
-        if (spendingChange < 10) consistencyScore = 95;
-        else if (spendingChange < 25) consistencyScore = 75;
-        else if (spendingChange < 50) consistencyScore = 50;
-        else consistencyScore = 25;
+        let spendingChange: number | null = null;
+        let consistencyScore: number | null = null;
+        if (hasTransactions && lastMonthTotal > 0 && totalExpense > 0) {
+            spendingChange = Math.abs((totalExpense - lastMonthTotal) / lastMonthTotal) * 100;
+            if (spendingChange < 10) consistencyScore = 95;
+            else if (spendingChange < 25) consistencyScore = 75;
+            else if (spendingChange < 50) consistencyScore = 50;
+            else consistencyScore = 25;
+        }
 
-        // ─── Weighted Composite Score ────────────────────────────
+        // ─── Weighted Composite Score (only from available factors) ──
         const weights = {
             savings: 0.25,
             goals: 0.20,
@@ -111,40 +141,49 @@ export async function insightRoutes(app: FastifyInstance) {
             consistency: 0.10,
         };
 
-        const compositeScore = Math.round(
-            savingsScore * weights.savings +
-            goalScore * weights.goals +
-            budgetScore * weights.budget +
-            dtiScore * weights.dti +
-            emergencyScore * weights.emergency +
-            consistencyScore * weights.consistency
-        );
+        // Only include factors that have actual data
+        let totalWeight = 0;
+        let weightedSum = 0;
+        if (savingsScore !== null) { weightedSum += savingsScore * weights.savings; totalWeight += weights.savings; }
+        if (goalScore !== null) { weightedSum += goalScore * weights.goals; totalWeight += weights.goals; }
+        if (budgetScore !== null) { weightedSum += budgetScore * weights.budget; totalWeight += weights.budget; }
+        if (dtiScore !== null) { weightedSum += dtiScore * weights.dti; totalWeight += weights.dti; }
+        if (emergencyScore !== null) { weightedSum += emergencyScore * weights.emergency; totalWeight += weights.emergency; }
+        if (consistencyScore !== null) { weightedSum += consistencyScore * weights.consistency; totalWeight += weights.consistency; }
 
-        const finalScore = Math.min(100, Math.max(0, compositeScore));
+        // Normalize score to 0-100 based on available weight
+        const finalScore = totalWeight > 0
+            ? Math.min(100, Math.max(0, Math.round(weightedSum / totalWeight)))
+            : null;
 
         // Grade with Indian-context descriptions
-        let grade: string, gradeDescription: string;
-        if (finalScore >= 80) { grade = 'Excellent'; gradeDescription = 'You are managing your finances like a pro! 🏆'; }
+        let grade: string | null = null, gradeDescription: string;
+        if (finalScore === null) {
+            gradeDescription = 'Not enough data to calculate your health score.';
+        } else if (finalScore >= 80) { grade = 'Excellent'; gradeDescription = 'You are managing your finances like a pro! 🏆'; }
         else if (finalScore >= 65) { grade = 'Good'; gradeDescription = 'Your financial health is strong. Keep it up! 💪'; }
         else if (finalScore >= 45) { grade = 'Fair'; gradeDescription = 'There\'s room for improvement. Small changes = big impact!'; }
         else { grade = 'Needs Attention'; gradeDescription = 'Let\'s build a solid financial foundation together. 🤝'; }
 
-        // Update profile
-        await prisma.financialProfile.upsert({
-            where: { userId },
-            update: {
-                healthScore: finalScore,
-                savingsRate,
-                lastCalculated: new Date(),
-            },
-            create: {
-                userId,
-                healthScore: finalScore,
-                savingsRate,
-            },
-        });
+        // Update profile only if we have a score
+        if (finalScore !== null) {
+            await prisma.financialProfile.upsert({
+                where: { userId },
+                update: {
+                    healthScore: finalScore,
+                    savingsRate,
+                    lastCalculated: new Date(),
+                },
+                create: {
+                    userId,
+                    healthScore: finalScore,
+                    savingsRate,
+                },
+            });
+        }
 
         return reply.send({
+            dataAvailable: true,
             healthScore: finalScore,
             grade,
             gradeDescription,
@@ -153,56 +192,64 @@ export async function insightRoutes(app: FastifyInstance) {
                 savingsRate: {
                     score: savingsScore,
                     weight: '25%',
-                    value: savingsRate.toFixed(1) + '%',
-                    status: savingsScore >= 70 ? 'great' : savingsScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: savingsRate >= 20
-                        ? 'Strong savings discipline! Consider SIPs for long-term wealth building.'
-                        : 'Try the 50/30/20 rule: 50% needs, 30% wants, 20% savings.',
+                    value: savingsScore !== null ? savingsRate.toFixed(1) + '%' : 'No data',
+                    status: savingsScore === null ? 'no_data' : savingsScore >= 70 ? 'great' : savingsScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: savingsScore === null
+                        ? 'Add your income and expense transactions to calculate your savings rate.'
+                        : savingsRate >= 20
+                            ? 'Strong savings discipline! Consider SIPs for long-term wealth building.'
+                            : 'Try the 50/30/20 rule: 50% needs, 30% wants, 20% savings.',
                 },
                 goalProgress: {
                     score: goalScore,
                     weight: '20%',
-                    value: goals.length > 0 ? `${goals.filter(g => g.currentAmount / g.targetAmount > 0.5).length}/${goals.length} on track` : 'No goals set',
-                    status: goalScore >= 70 ? 'great' : goalScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: goals.length === 0
+                    value: goalScore !== null ? `${goals.filter(g => g.currentAmount / g.targetAmount > 0.5).length}/${goals.length} on track` : 'No data',
+                    status: goalScore === null ? 'no_data' : goalScore >= 70 ? 'great' : goalScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: goalScore === null
                         ? 'Set your first goal! ₹500/month emergency fund is a great start.'
                         : goalScore >= 70 ? 'Excellent goal progress! You\'re building wealth systematically.' : 'Consider automating your goal contributions via UPI autopay.',
                 },
                 budgetDiscipline: {
                     score: budgetScore,
                     weight: '20%',
-                    value: budgets.length > 0 ? `${budgets.length} active budgets` : 'No budgets set',
-                    status: budgetScore >= 70 ? 'great' : budgetScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: budgets.length === 0
+                    value: budgetScore !== null ? `${budgets.length} active budgets` : 'No data',
+                    status: budgetScore === null ? 'no_data' : budgetScore >= 70 ? 'great' : budgetScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: budgetScore === null
                         ? 'Create budgets for Food, Transport & Shopping to control spending.'
                         : 'Budgets are active — great discipline!',
                 },
                 debtToIncome: {
                     score: dtiScore,
                     weight: '15%',
-                    value: dtiRatio.toFixed(1) + '%',
-                    status: dtiScore >= 70 ? 'great' : dtiScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: dtiRatio > 40
-                        ? 'High EMI load. Consider prepaying high-interest loans first.'
-                        : dtiRatio > 0 ? 'Healthy debt levels. Keep EMIs under 30% of income.' : 'No EMI obligations — great financial flexibility!',
+                    value: dtiScore !== null ? dtiRatio.toFixed(1) + '%' : 'No data',
+                    status: dtiScore === null ? 'no_data' : dtiScore >= 70 ? 'great' : dtiScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: dtiScore === null
+                        ? 'Add your income transactions to calculate your debt-to-income ratio.'
+                        : dtiRatio > 40
+                            ? 'High EMI load. Consider prepaying high-interest loans first.'
+                            : dtiRatio > 0 ? 'Healthy debt levels. Keep EMIs under 30% of income.' : 'No EMI obligations — great financial flexibility!',
                 },
                 emergencyFund: {
                     score: emergencyScore,
                     weight: '10%',
-                    value: emergencyGoal ? `₹${emergencyGoal.currentAmount.toLocaleString()} / ₹${emergencyGoal.targetAmount.toLocaleString()}` : 'Not started',
-                    status: emergencyScore >= 70 ? 'great' : emergencyScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: emergencyScore < 50
-                        ? 'Build a 3-month emergency fund. Even ₹100/day adds up to ₹9,000/quarter!'
-                        : 'Good emergency preparedness! Target 6 months of expenses.',
+                    value: emergencyScore !== null ? `₹${emergencyGoal!.currentAmount.toLocaleString()} / ₹${emergencyGoal!.targetAmount.toLocaleString()}` : 'No data',
+                    status: emergencyScore === null ? 'no_data' : emergencyScore >= 70 ? 'great' : emergencyScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: emergencyScore === null
+                        ? 'Create an emergency fund goal to start tracking.'
+                        : emergencyScore < 50
+                            ? 'Build a 3-month emergency fund. Even ₹100/day adds up to ₹9,000/quarter!'
+                            : 'Good emergency preparedness! Target 6 months of expenses.',
                 },
                 spendingConsistency: {
                     score: consistencyScore,
                     weight: '10%',
-                    value: `${spendingChange.toFixed(0)}% change vs last month`,
-                    status: consistencyScore >= 70 ? 'great' : consistencyScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: consistencyScore < 50
-                        ? 'Large month-to-month spending swings. Track daily expenses to find patterns.'
-                        : 'Consistent spending habits — predictable finances are healthy finances!',
+                    value: consistencyScore !== null ? `${spendingChange!.toFixed(0)}% change vs last month` : 'No data',
+                    status: consistencyScore === null ? 'no_data' : consistencyScore >= 70 ? 'great' : consistencyScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: consistencyScore === null
+                        ? 'Add expense transactions across months to track spending consistency.'
+                        : consistencyScore < 50
+                            ? 'Large month-to-month spending swings. Track daily expenses to find patterns.'
+                            : 'Consistent spending habits — predictable finances are healthy finances!',
                 },
             },
             tips: generateTips(savingsRate, goals.length, budgets.length, totalIncome, totalExpense),

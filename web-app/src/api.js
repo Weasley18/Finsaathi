@@ -45,7 +45,10 @@ export const api = {
     getDashboard: () => apiFetch('/users/dashboard'),
 
     // Users (Admin)
-    getUsers: () => apiFetch('/users'),
+    getUsers: (params = {}) => {
+        const qs = new URLSearchParams(params).toString();
+        return apiFetch(`/users${qs ? '?' + qs : ''}`);
+    },
     getUserById: (id) => apiFetch(`/users/${id}`),
     updateUser: (id, data) => apiFetch(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteUser: (id) => apiFetch(`/users/${id}`, { method: 'DELETE' }),
@@ -120,6 +123,7 @@ export const api = {
     updateAdvisorTier: (id, tier) => apiFetch(`/advisors/${id}/tier`, { method: 'PUT', body: JSON.stringify({ tier }) }),
 
     getPendingApprovals: () => apiFetch('/admin/pending-approvals'),
+    getAdminStats: () => apiFetch('/admin/stats'),
     approveUser: (userId) => apiFetch(`/admin/approve/${userId}`, { method: 'POST', body: JSON.stringify({}) }),
     rejectUser: (userId, reason) => apiFetch(`/admin/reject/${userId}`, { method: 'POST', body: JSON.stringify({ reason }) }),
 

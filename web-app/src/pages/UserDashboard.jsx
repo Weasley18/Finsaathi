@@ -58,8 +58,8 @@ export default function UserDashboard() {
                 </div>
                 <div className="glass-card stat-card fade-in-up delay-4">
                     <div className="label">{t('dashboard.healthScore')}</div>
-                    <div className="value" style={{ color: 'var(--bright-gold)' }}>{summary.healthScore || '—'}/100</div>
-                    <div className="trend"><Activity size={14} /> {t('dashboard.score')}</div>
+                    <div className="value" style={{ color: 'var(--bright-gold)' }}>{summary.healthScore != null ? `${summary.healthScore}/100` : '—'}</div>
+                    <div className="trend"><Activity size={14} /> {summary.healthScore != null ? t('dashboard.score') : 'No data'}</div>
                 </div>
             </div>
 
