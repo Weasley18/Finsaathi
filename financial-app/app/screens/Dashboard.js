@@ -8,6 +8,7 @@ import BottomNav from '../components/BottomNav';
 import useFinanceStore from '../store/financeStore';
 import useAuthStore from '../store/authStore';
 import { colors, gradients, glassmorphism } from '../theme';
+import api from '../services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -44,20 +45,31 @@ export default function Dashboard({ navigation }) {
   const { dashboard, dashboardLoading, fetchDashboard } = useFinanceStore();
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = React.useState(false);
+  const [gamification, setGamification] = React.useState({ points: 0, streakDays: 0, badges: [] });
 
   useEffect(() => {
     const { token, user: authUser } = useAuthStore.getState();
     if (token && authUser) {
       console.log('[Dashboard] Fetching data for', authUser.phone);
       fetchDashboard();
+      fetchGamification();
     } else {
       console.log('[Dashboard] Waiting for auth...');
     }
   }, [user]);
 
+  const fetchGamification = async () => {
+    try {
+      const res = await api.get('/gamification/status');
+      if (res.data) setGamification(res.data);
+    } catch (e) {
+      console.log('Error fetching gamification data', e);
+    }
+  };
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchDashboard();
+    await Promise.all([fetchDashboard(), fetchGamification()]);
     setRefreshing(false);
   }, []);
 
@@ -85,8 +97,22 @@ export default function Dashboard({ navigation }) {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.greeting}>Good {getTimeOfDay()}</Text>
-            <Text style={styles.userName}>Namaste, {userName}</Text>
+            <View>
+              <Text style={styles.greeting}>Good {getTimeOfDay()}</Text>
+              <Text style={styles.userName}>Namaste, {userName}</Text>
+            </View>
+
+            {/* Gamification Stats */}
+            <View style={styles.gamificationHeader}>
+              <View style={styles.gamificationPill}>
+                <Text style={styles.streakEmoji}>🔥</Text>
+                <Text style={styles.gamificationValue}>{gamification.streakDays}</Text>
+              </View>
+              <View style={[styles.gamificationPill, { backgroundColor: 'rgba(212, 175, 55, 0.15)', borderColor: colors.brightGold }]}>
+                <Text style={styles.pointsEmoji}>🌟</Text>
+                <Text style={[styles.gamificationValue, { color: colors.brightGold }]}>{gamification.points}</Text>
+              </View>
+            </View>
           </View>
 
           {/* AI Advisor Welcome Chat Bubble */}
@@ -310,6 +336,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.brightGold,
     letterSpacing: 0.5,
+  },
+  header: { marginTop: 10, marginBottom: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  gamificationHeader: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  gamificationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 107, 107, 0.15)', // Light red for streak
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 107, 0.3)',
+  },
+  streakEmoji: { fontSize: 16, marginRight: 4 },
+  pointsEmoji: { fontSize: 16, marginRight: 4 },
+  gamificationValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#ff6b6b',
   },
   // AI Welcome
   aiWelcomeBubble: {
