@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../server.js';
 import { z } from 'zod';
 import { categorizeTransaction, suggestCategory, CATEGORIES } from '../services/categorizer.js';
+import { chatWithOllama } from '../services/ollama.js';
 
 const createTransactionSchema = z.object({
     amount: z.number().positive(),
@@ -41,6 +42,40 @@ export async function transactionRoutes(app: FastifyInstance) {
             allMatches: suggestion.allMatches,
             availableCategories: CATEGORIES,
         });
+    });
+
+    // ─── AI Voice/Text Parsing ───────────────────────────────────
+    // Takes natural language (e.g. from Voice output) and extracts transaction data
+    app.post('/parse-text', async (request: any, reply) => {
+        const { text } = z.object({ text: z.string() }).parse(request.body);
+
+        const systemPrompt = `
+You are an AI assistant that extracts transaction details from natural language.
+The user will provide a sentence like "I spent 200 rupees on groceries yesterday" or "Got my salary of 50000".
+Extract the following fields and return ONLY a valid JSON object. Do not include any markdown formatting, just the raw JSON.
+{
+  "amount": <number>,
+  "category": <string> (guess a short category like "Food", "Transport", "Salary", or "Other"),
+  "description": <string> (a brief summary of the expense/income),
+  "type": <"INCOME" | "EXPENSE">
+}
+If you cannot determine a field, make your best guess or omit it. But "amount" and "type" are usually mandatory.
+        `;
+
+        try {
+            const llmResponse = await chatWithOllama(systemPrompt, [{ role: 'user', content: text }]);
+
+            // Try to parse the LLM's JSON
+            // Sometimes models wrap json in markdown block, so let's strip it
+            const cleanJson = llmResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsedData = JSON.parse(cleanJson);
+
+            return reply.send({ success: true, parsedData });
+        } catch (e) {
+            console.error("Failed to parse text transaction", e);
+            // Fallback empty response
+            return reply.send({ success: false, parsedData: { amount: 0, category: 'Other', description: text, type: 'EXPENSE' } });
+        }
     });
 
     // ─── Create Transaction ──────────────────────────────────────
