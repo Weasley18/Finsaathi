@@ -41,6 +41,7 @@ export default function OnboardingPage() {
     const [baslMembershipId, setBaslMembershipId] = useState('');
     const [highestQualification, setHighestQualification] = useState('');
     const [optionalCertifications, setOptionalCertifications] = useState([]);
+    const [otherCertification, setOtherCertification] = useState('');
     const [languagesSpoken, setLanguagesSpoken] = useState([]);
     const [areasOfExpertise, setAreasOfExpertise] = useState([]);
     const [feeModel, setFeeModel] = useState('FLAT_FEE');
@@ -50,6 +51,8 @@ export default function OnboardingPage() {
     const [nismXADoc, setNismXADoc] = useState(null);
     const [nismXBDoc, setNismXBDoc] = useState(null);
     const [panDoc, setPanDoc] = useState(null);
+    const [optionalCertificationsDocs, setOptionalCertificationsDocs] = useState({});
+    const [partnerDoc, setPartnerDoc] = useState(null);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -72,6 +75,19 @@ export default function OnboardingPage() {
                 await api.uploadDocument(nismXADoc, 'nism_xa');
                 await api.uploadDocument(nismXBDoc, 'nism_xb');
                 await api.uploadDocument(panDoc, 'pan');
+
+                for (const cert of optionalCertifications) {
+                    const certKey = cert === 'Other' && otherCertification ? otherCertification : cert;
+                    const doc = optionalCertificationsDocs[cert];
+                    if (doc) {
+                        await api.uploadDocument(doc, `optional_cert_${certKey.replace(/[^a-zA-Z0-9]/g, '_')}`);
+                    }
+                }
+            }
+
+            // Upload partner document if Partner
+            if (role === 'PARTNER' && partnerDoc) {
+                await api.uploadDocument(partnerDoc, 'partner_legal_doc');
             }
 
             const payload = {
@@ -90,7 +106,7 @@ export default function OnboardingPage() {
                     sebiCertificateExpiryDate,
                     baslMembershipId,
                     highestQualification,
-                    optionalCertifications,
+                    optionalCertifications: optionalCertifications.map(c => c === 'Other' && otherCertification ? otherCertification : c),
                     languagesSpoken,
                     areasOfExpertise,
                     feeModel
@@ -185,15 +201,29 @@ export default function OnboardingPage() {
                                     </select>
                                 </div>
                                 <div style={styles.inputGroup}>
-                                    <label style={styles.label}>Areas of Interest (Select multiple)</label>
-                                    <select multiple className="input" value={areasOfInterest} onChange={e => setAreasOfInterest(Array.from(e.target.selectedOptions, option => option.value))} style={{ ...styles.select, height: '100px' }}>
-                                        <option value="Micro-savings">Micro-savings</option>
-                                        <option value="Debt Management">Debt Management</option>
-                                        <option value="Gig-Worker Financial Planning">Gig-Worker Financial Planning</option>
-                                        <option value="Rural Microfinance">Rural Microfinance</option>
-                                        <option value="Retirement Planning">Retirement Planning</option>
-                                    </select>
-                                    <div style={styles.helpText}>Hold Ctrl/Cmd to select multiple. This helps us match you with the right advisor.</div>
+                                    <label style={styles.label}>Areas of Interest</label>
+                                    <div style={styles.checkboxGroup}>
+                                        {[
+                                            { value: 'Micro-savings', label: 'Micro-savings' },
+                                            { value: 'Debt Management', label: 'Debt Management' },
+                                            { value: 'Gig-Worker Financial Planning', label: 'Gig-Worker Financial Planning' },
+                                            { value: 'Rural Microfinance', label: 'Rural Microfinance' },
+                                            { value: 'Retirement Planning', label: 'Retirement Planning' }
+                                        ].map(opt => (
+                                            <label key={opt.value} style={styles.checkboxLabel}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={areasOfInterest.includes(opt.value)}
+                                                    onChange={e => {
+                                                        if (e.target.checked) setAreasOfInterest([...areasOfInterest, opt.value]);
+                                                        else setAreasOfInterest(areasOfInterest.filter(v => v !== opt.value));
+                                                    }}
+                                                />
+                                                <span>{opt.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <div style={styles.helpText}>Select multiple. This helps us match you with the right advisor.</div>
                                 </div>
                             </>
                         )}
@@ -254,35 +284,110 @@ export default function OnboardingPage() {
                                 </div>
                                 <div style={styles.inputGroup}>
                                     <label style={styles.label}>Optional Certifications</label>
-                                    <select multiple className="input" value={optionalCertifications} onChange={e => setOptionalCertifications(Array.from(e.target.selectedOptions, option => option.value))} style={{ ...styles.select, height: '80px' }}>
-                                        <option value="NISM-Series-V-A">NISM-Series-V-A: Mutual Fund</option>
-                                        <option value="NISM-Series-XVII">NISM-Series-XVII: Retirement</option>
-                                        <option value="NISM-Series-XV">NISM-Series-XV: Research Analyst</option>
-                                    </select>
-                                    <div style={styles.helpText}>Hold Ctrl/Cmd to select multiple.</div>
+                                    <div style={styles.checkboxGroup}>
+                                        {[
+                                            { value: 'NISM-Series-V-A', label: 'NISM-Series-V-A: Mutual Fund' },
+                                            { value: 'NISM-Series-XVII', label: 'NISM-Series-XVII: Retirement' },
+                                            { value: 'NISM-Series-XV', label: 'NISM-Series-XV: Research Analyst' },
+                                            { value: 'Other', label: 'Other (Please specify)' }
+                                        ].map(opt => (
+                                            <label key={opt.value} style={styles.checkboxLabel}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={optionalCertifications.includes(opt.value)}
+                                                    onChange={e => {
+                                                        const isChecked = e.target.checked;
+                                                        if (isChecked) {
+                                                            setOptionalCertifications([...optionalCertifications, opt.value]);
+                                                        } else {
+                                                            setOptionalCertifications(optionalCertifications.filter(v => v !== opt.value));
+                                                            const newDocs = { ...optionalCertificationsDocs };
+                                                            delete newDocs[opt.value];
+                                                            setOptionalCertificationsDocs(newDocs);
+                                                        }
+                                                    }}
+                                                />
+                                                <span>{opt.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <div style={styles.helpText}>Select multiple if applicable.</div>
+                                    {optionalCertifications.includes('Other') && (
+                                        <div style={{ marginTop: 12 }}>
+                                            <input className="input" value={otherCertification} onChange={e => setOtherCertification(e.target.value)} placeholder="Enter certification name" required />
+                                        </div>
+                                    )}
+                                    {optionalCertifications.length > 0 && (
+                                        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                            <h4 style={{ ...styles.label, marginTop: 8, marginBottom: 4, color: '#d4af35' }}>Upload Selected Optional Certifications</h4>
+                                            {optionalCertifications.map(cert => {
+                                                const displayLabel = cert === 'Other' ? (otherCertification || 'Other Certification') : cert;
+                                                return (
+                                                    <div key={cert} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                                        <label style={{ ...styles.label, textTransform: 'none' }}>{displayLabel}</label>
+                                                        <input
+                                                            type="file"
+                                                            accept=".pdf,.png,.jpg,.jpeg"
+                                                            onChange={e => setOptionalCertificationsDocs({ ...optionalCertificationsDocs, [cert]: e.target.files[0] })}
+                                                            style={styles.fileInput}
+                                                            required
+                                                        />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <h3 style={styles.sectionTitle}>Platform Profiling</h3>
                                 <div style={styles.inputGroup}>
                                     <label style={styles.label}>Languages Spoken</label>
-                                    <select multiple className="input" value={languagesSpoken} onChange={e => setLanguagesSpoken(Array.from(e.target.selectedOptions, option => option.value))} style={{ ...styles.select, height: '80px' }}>
-                                        <option value="English">English</option>
-                                        <option value="Hindi">Hindi</option>
-                                        <option value="Marathi">Marathi</option>
-                                        <option value="Gujarati">Gujarati</option>
-                                        <option value="Tamil">Tamil</option>
-                                    </select>
+                                    <div style={styles.checkboxGroup}>
+                                        {[
+                                            { value: 'English', label: 'English' },
+                                            { value: 'Hindi', label: 'Hindi' },
+                                            { value: 'Marathi', label: 'Marathi' },
+                                            { value: 'Gujarati', label: 'Gujarati' },
+                                            { value: 'Tamil', label: 'Tamil' }
+                                        ].map(opt => (
+                                            <label key={opt.value} style={styles.checkboxLabel}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={languagesSpoken.includes(opt.value)}
+                                                    onChange={e => {
+                                                        if (e.target.checked) setLanguagesSpoken([...languagesSpoken, opt.value]);
+                                                        else setLanguagesSpoken(languagesSpoken.filter(v => v !== opt.value));
+                                                    }}
+                                                />
+                                                <span>{opt.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
                                     <div style={styles.helpText}>Select all regional languages you support.</div>
                                 </div>
                                 <div style={styles.inputGroup}>
                                     <label style={styles.label}>Areas of Expertise</label>
-                                    <select multiple className="input" value={areasOfExpertise} onChange={e => setAreasOfExpertise(Array.from(e.target.selectedOptions, option => option.value))} style={{ ...styles.select, height: '100px' }} required>
-                                        <option value="Micro-savings">Micro-savings</option>
-                                        <option value="Debt Management">Debt Management</option>
-                                        <option value="Gig-Worker Financial Planning">Gig-Worker Financial Planning</option>
-                                        <option value="Rural Microfinance">Rural Microfinance</option>
-                                        <option value="Retirement Planning">Retirement Planning</option>
-                                    </select>
+                                    <div style={styles.checkboxGroup}>
+                                        {[
+                                            { value: 'Micro-savings', label: 'Micro-savings' },
+                                            { value: 'Debt Management', label: 'Debt Management' },
+                                            { value: 'Gig-Worker Financial Planning', label: 'Gig-Worker Financial Planning' },
+                                            { value: 'Rural Microfinance', label: 'Rural Microfinance' },
+                                            { value: 'Retirement Planning', label: 'Retirement Planning' }
+                                        ].map(opt => (
+                                            <label key={opt.value} style={styles.checkboxLabel}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={areasOfExpertise.includes(opt.value)}
+                                                    onChange={e => {
+                                                        if (e.target.checked) setAreasOfExpertise([...areasOfExpertise, opt.value]);
+                                                        else setAreasOfExpertise(areasOfExpertise.filter(v => v !== opt.value));
+                                                    }}
+                                                />
+                                                <span>{opt.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
                                 </div>
                                 <div style={styles.inputGroup}>
                                     <label style={styles.label}>Advisory Fee Model</label>
@@ -331,7 +436,7 @@ export default function OnboardingPage() {
                                     />
                                 </div>
                                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 20 }}>
-                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>1️⃣ Legal Existence (Non-Negotiable)</h3>
+                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>Legal Existence (Non-Negotiable)</h3>
 
                                     <div style={styles.inputGroup}>
                                         <label style={styles.label}>Legal Document Type</label>
@@ -349,13 +454,19 @@ export default function OnboardingPage() {
                                     </div>
 
                                     <div style={styles.inputGroup}>
+                                        <label style={styles.label}>Upload Legal Document</label>
+                                        <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={e => setPartnerDoc(e.target.files[0])} style={styles.fileInput} required />
+                                        <div style={styles.helpText}>Please upload a clear copy of the selected legal document.</div>
+                                    </div>
+
+                                    <div style={styles.inputGroup}>
                                         <label style={styles.label}>Registered Office Address</label>
                                         <textarea className="input" value={partnerData.registeredAddr} onChange={e => setPartnerData({ ...partnerData, registeredAddr: e.target.value })} placeholder="Full legal address..." rows={2} required />
                                     </div>
                                 </div>
 
                                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 20 }}>
-                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>2️⃣ Regulatory Legitimacy</h3>
+                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>Regulatory Legitimacy</h3>
 
                                     <div style={styles.inputGroup}>
                                         <label style={styles.label}>Regulatory Registration ID (RBI / SEBI / NGO Darpan)</label>
@@ -365,7 +476,7 @@ export default function OnboardingPage() {
                                 </div>
 
                                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 20 }}>
-                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>3️⃣ Responsible Person Declaration</h3>
+                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>Responsible Person Declaration</h3>
 
                                     <div style={styles.twoColumnGrid}>
                                         <div style={styles.inputGroup}>
@@ -391,7 +502,7 @@ export default function OnboardingPage() {
                                 </div>
 
                                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 20 }}>
-                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>4️⃣ Mandatory Legal Agreement Signing</h3>
+                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>Mandatory Legal Agreement Signing</h3>
 
                                     <div style={styles.checkboxGroup}>
                                         <label style={styles.checkboxLabel}>
@@ -410,22 +521,6 @@ export default function OnboardingPage() {
                                             <input type="checkbox" checked={partnerData.hasSignedBreachReport} onChange={e => setPartnerData({ ...partnerData, hasSignedBreachReport: e.target.checked })} required />
                                             <span>I agree to the Breach Reporting Agreement</span>
                                         </label>
-                                    </div>
-                                </div>
-
-                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 20 }}>
-                                    <h3 style={{ color: '#d4af35', fontSize: 16, marginBottom: 16 }}>5️⃣ Basic Technical Readiness</h3>
-
-                                    <div style={styles.inputGroup}>
-                                        <label style={styles.label}>Secure Webhook URL (HTTPS)</label>
-                                        <input type="url" className="input" value={partnerData.webhookUrl} onChange={e => setPartnerData({ ...partnerData, webhookUrl: e.target.value })} placeholder="https://api.domain.com/webhooks" required />
-                                    </div>
-
-                                    <div style={styles.checkboxGroup}>
-                                        <label style={styles.checkboxLabel}>
-                                            <input type="checkbox" checked={partnerData.oauthCompatible} onChange={e => setPartnerData({ ...partnerData, oauthCompatible: e.target.checked })} required />
-                                            <span>We are an OAuth 2.0 compatible system</span>
-                                        </label>
                                         <label style={styles.checkboxLabel}>
                                             <input type="checkbox" checked={partnerData.digitalAcceptanceOfTerms} onChange={e => setPartnerData({ ...partnerData, digitalAcceptanceOfTerms: e.target.checked })} required />
                                             <span>I digitally accept all FinSaathi Terms & Conditions</span>
@@ -439,16 +534,16 @@ export default function OnboardingPage() {
                             type="submit"
                             disabled={
                                 !name ||
-                                (role === 'ADVISOR' && !businessId) ||
-                                (role === 'PARTNER' && (!businessId || !partnerData.legalDocNumber || !partnerData.regulatoryRegNumber || !partnerData.complianceOfficerEmail || !partnerData.hasSignedDataProcessAgreement)) ||
+                                (role === 'ADVISOR' && (!businessId || (optionalCertifications.length > 0 && optionalCertifications.some(c => !optionalCertificationsDocs[c])))) ||
+                                (role === 'PARTNER' && (!businessId || !partnerData.legalDocNumber || !partnerDoc || !partnerData.regulatoryRegNumber || !partnerData.complianceOfficerEmail || !partnerData.hasSignedDataProcessAgreement)) ||
                                 loading
                             }
                             style={{
                                 ...styles.submitBtn,
                                 opacity: (
                                     !name ||
-                                    (role === 'ADVISOR' && !businessId) ||
-                                    (role === 'PARTNER' && (!businessId || !partnerData.legalDocNumber || !partnerData.regulatoryRegNumber || !partnerData.complianceOfficerEmail || !partnerData.hasSignedDataProcessAgreement)) ||
+                                    (role === 'ADVISOR' && (!businessId || (optionalCertifications.length > 0 && optionalCertifications.some(c => !optionalCertificationsDocs[c])))) ||
+                                    (role === 'PARTNER' && (!businessId || !partnerData.legalDocNumber || !partnerDoc || !partnerData.regulatoryRegNumber || !partnerData.complianceOfficerEmail || !partnerData.hasSignedDataProcessAgreement)) ||
                                     loading
                                 ) ? 0.5 : 1
                             }}

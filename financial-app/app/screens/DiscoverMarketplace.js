@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Typography, Layout } from '../constants/theme';
+import { colors as Colors, typography as Typography, spacing as Layout } from '../theme';
 import { ShoppingBag, Landmark, ChevronRight, CheckCircle, ExternalLink, Star } from 'lucide-react-native';
 import api from '../services/api';
 
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.background,
     },
     header: {
-        padding: Layout.screenPadding,
+        padding: Layout.lg,
         paddingBottom: 16,
     },
     headerTitle: {
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     },
     tabContainer: {
         flexDirection: 'row',
-        paddingHorizontal: Layout.screenPadding,
+        paddingHorizontal: Layout.lg,
         marginBottom: 16,
     },
     tab: {
@@ -264,11 +264,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     scrollContent: {
-        padding: Layout.screenPadding,
+        padding: Layout.lg,
     },
     card: {
         backgroundColor: Colors.surface,
-        borderRadius: Layout.borderRadius.lg,
+        borderRadius: 16,
         padding: 20,
         marginBottom: 16,
         borderWidth: 1,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     cardStats: {
         flexDirection: 'row',
         backgroundColor: 'rgba(0,0,0,0.2)',
-        borderRadius: Layout.borderRadius.md,
+        borderRadius: 8,
         padding: 12,
         marginBottom: 16,
     },
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     },
     benefitsBox: {
         backgroundColor: 'rgba(0,0,0,0.2)',
-        borderRadius: Layout.borderRadius.md,
+        borderRadius: 8,
         padding: 12,
         marginBottom: 16,
         borderLeftWidth: 3,
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     actionButton: {
         flexDirection: 'row',
         paddingVertical: 14,
-        borderRadius: Layout.borderRadius.md,
+        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
     },
