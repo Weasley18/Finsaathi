@@ -87,6 +87,12 @@ enum DocumentStatus {
   REJECTED
 }
 
+enum ChatType {
+  AI_CHAT
+  ADVISOR_CLONE
+  COPILOT
+}
+
 // ─── Models ──────────────────────────────────────────────────────
 
 model User {
@@ -133,6 +139,7 @@ model User {
   budgets          Budget[]
   goals            Goal[]
   chatMessages     ChatMessage[]
+  chatRooms        ChatRoom[]
   documents        Document[]
   badges           Badge[]
   activities       ActivityTracker[]
@@ -145,6 +152,22 @@ model User {
   partnerProducts  PartnerProduct[]
   partnerMatches   PartnerMatch[]
   advisorProfile   AdvisorProfile?
+
+  // Direct Messaging
+  sentMessages     DirectMessage[] @relation("MessageSender")
+  receivedMessages DirectMessage[] @relation("MessageReceiver")
+
+  // Recommendations
+  sentRecommendations     Recommendation[] @relation("RecommendationAdvisor")
+  receivedRecommendations Recommendation[] @relation("RecommendationClient")
+
+  // Scheduled Calls
+  scheduledCallsAsAdvisor ScheduledCall[] @relation("CallAdvisor")
+  scheduledCallsAsClient  ScheduledCall[] @relation("CallClient")
+
+  // Client Flags
+  flagsCreated  ClientFlag[] @relation("FlagAdvisor")
+  flagsReceived ClientFlag[] @relation("FlagClient")
 
   @@map("users")
 }
@@ -299,17 +322,35 @@ model Goal {
   @@map("goals")
 }
 
-model ChatMessage {
+model ChatRoom {
   id        String   @id @default(cuid())
   userId    String
-  content   String
-  role      String   // 'user' | 'assistant' | 'system'
-  toolCalls String?  // JSON string of MCP tool calls/results
+  title     String   @default("New Chat")
+  type      ChatType @default(AI_CHAT)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId, type, updatedAt])
+  @@map("chat_rooms")
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  userId     String
+  chatRoomId String?
+  content    String
+  role       String   // 'user' | 'assistant' | 'system'
+  toolCalls  String?  // JSON string of MCP tool calls/results
+  createdAt  DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatRoom ChatRoom? @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([chatRoomId, createdAt])
   @@map("chat_messages")
 }
 
@@ -449,4 +490,80 @@ model ActivityTracker {
 
   @@index([userId, action, createdAt])
   @@map("activity_trackers")
+}
+
+// ─── Advisor-User Interaction Models ─────────────────────────────
+
+model DirectMessage {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  content    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId, receiverId, createdAt])
+  @@index([receiverId, isRead])
+  @@map("direct_messages")
+}
+
+model Recommendation {
+  id        String   @id @default(cuid())
+  advisorId String
+  clientId  String
+  title     String
+  content   String
+  category  String   // 'savings', 'investment', 'insurance', 'debt', 'general'
+  status    String   @default("sent") // 'sent', 'viewed', 'accepted', 'dismissed'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  advisor User @relation("RecommendationAdvisor", fields: [advisorId], references: [id], onDelete: Cascade)
+  client  User @relation("RecommendationClient", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([advisorId])
+  @@map("recommendations")
+}
+
+model ScheduledCall {
+  id          String    @id @default(cuid())
+  advisorId   String
+  clientId    String
+  scheduledAt DateTime
+  duration    Int       @default(30) // minutes
+  notes       String?
+  status      String    @default("scheduled") // 'scheduled', 'completed', 'cancelled', 'missed'
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  advisor User @relation("CallAdvisor", fields: [advisorId], references: [id], onDelete: Cascade)
+  client  User @relation("CallClient", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([advisorId, scheduledAt])
+  @@index([clientId])
+  @@map("scheduled_calls")
+}
+
+model ClientFlag {
+  id         String    @id @default(cuid())
+  advisorId  String
+  clientId   String
+  reason     String
+  priority   String    @default("medium") // 'low', 'medium', 'high', 'critical'
+  status     String    @default("open") // 'open', 'reviewing', 'resolved'
+  resolvedAt DateTime?
+  resolvedBy String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  advisor User @relation("FlagAdvisor", fields: [advisorId], references: [id], onDelete: Cascade)
+  client  User @relation("FlagClient", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([status])
+  @@map("client_flags")
 }

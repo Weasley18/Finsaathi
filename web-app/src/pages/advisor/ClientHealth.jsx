@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     ArrowLeft, Phone, Calendar, Shield, TrendingUp,
-    Target, AlertTriangle, Save, MessageSquare, Bell
+    Target, AlertTriangle, Save, MessageSquare, Bell, Check
 } from 'lucide-react';
 import { api } from '../../api';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import SendRecommendationModal, { ScheduleCallModal, FlagForReviewModal } from './ActionModals';
 
 // Specific components for this page
 
@@ -76,6 +77,12 @@ export default function ClientHealth() {
     const [client, setClient] = useState(null);
     const [loading, setLoading] = useState(true);
     const [notes, setNotes] = useState('');
+    const [notesList, setNotesList] = useState([]);
+    const [savingNotes, setSavingNotes] = useState(false);
+    const [notesSaved, setNotesSaved] = useState(false);
+    const [showRecModal, setShowRecModal] = useState(false);
+    const [showCallModal, setShowCallModal] = useState(false);
+    const [showFlagModal, setShowFlagModal] = useState(false);
 
     // Mock data for charts
     const trendData = [
@@ -93,18 +100,37 @@ export default function ClientHealth() {
 
     const loadClientData = async () => {
         try {
-            // In a real app we'd fetch specific client details
-            // For now we'll fetch via getUserById or reuse dashboard logic
-            // But we don't have a direct "get client detailed profile" endpoint for advisor yet
-            // apart from getAdvisorClients returning list. 
-            // Let's assume we can fetch user details by ID as admin/advisor
             const res = await api.getUserById(id);
             setClient(res.user);
-            // setNotes(res.user.advisorNotes || '');
         } catch (err) {
             console.error("Failed to load client", err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadNotes = async () => {
+        try {
+            const res = await api.getAdvisorNotes(id);
+            setNotesList(res.notes || []);
+        } catch (err) { console.error('Failed to load notes', err); }
+    };
+
+    useEffect(() => { loadNotes(); }, [id]);
+
+    const saveNotes = async () => {
+        if (!notes.trim()) return;
+        setSavingNotes(true);
+        try {
+            await api.createAdvisorNote(id, notes.trim());
+            setNotes('');
+            setNotesSaved(true);
+            setTimeout(() => setNotesSaved(false), 2000);
+            loadNotes();
+        } catch (err) {
+            console.error('Failed to save notes', err);
+        } finally {
+            setSavingNotes(false);
         }
     };
 
@@ -198,38 +224,66 @@ export default function ClientHealth() {
                     <h3 className="section-title">Advisor Notes</h3>
                     <textarea
                         className="input"
-                        rows="5"
+                        rows="3"
                         placeholder="Add private notes about this client..."
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         style={{ resize: 'none', marginBottom: 12 }}
                     />
                     <div style={{ textAlign: 'right' }}>
-                        <button className="btn btn-primary">
-                            <Save size={16} /> Save Notes
+                        <button className="btn btn-primary" onClick={saveNotes} disabled={savingNotes || !notes.trim()}>
+                            {notesSaved ? <><Check size={16} /> Saved!</> : <><Save size={16} /> {savingNotes ? 'Saving...' : 'Save Notes'}</>}
                         </button>
                     </div>
+                    {notesList.length > 0 && (
+                        <div style={{ marginTop: 16, borderTop: '1px solid var(--card-border)', paddingTop: 12 }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Previous Notes</div>
+                            {notesList.slice(0, 5).map((n, i) => (
+                                <div key={i} style={{
+                                    padding: '8px 12px', marginBottom: 6, borderRadius: 8,
+                                    background: 'rgba(186,143,13,0.05)', fontSize: 13,
+                                    borderLeft: '2px solid var(--accent)',
+                                }}>
+                                    <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4 }}>{n.note || n.content}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                                        {new Date(n.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* ─── Quick Actions ─── */}
                 <div className="glass-card">
                     <h3 className="section-title">Actions</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <button className="btn btn-primary" style={{ justifyContent: 'center' }}>
+                        <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={() => setShowRecModal(true)}>
                             <TrendingUp size={16} /> Send Recommendation
                         </button>
-                        <button className="btn btn-secondary" style={{ justifyContent: 'center' }}>
+                        <button className="btn btn-secondary" style={{ justifyContent: 'center' }} onClick={() => setShowCallModal(true)}>
                             <Phone size={16} /> Schedule Call
                         </button>
-                        <button className="btn btn-secondary" style={{ justifyContent: 'center' }}>
+                        <button className="btn btn-secondary" style={{ justifyContent: 'center' }} onClick={() => navigate('/advisor/messages', { state: { clientId: id, clientName: client.name } })}>
                             <MessageSquare size={16} /> Chat
                         </button>
-                        <button className="btn btn-secondary" style={{ justifyContent: 'center', color: 'var(--error)', borderColor: 'rgba(231,76,60,0.3)' }}>
+                        <button className="btn btn-secondary" style={{ justifyContent: 'center', color: 'var(--error)', borderColor: 'rgba(231,76,60,0.3)' }} onClick={() => setShowFlagModal(true)}>
                             <AlertTriangle size={16} /> Flag for Review
                         </button>
                     </div>
                 </div>
             </div>
+
+            {/* ─── Modals ─── */}
+            {showRecModal && (
+                <SendRecommendationModal clientId={id} clientName={client.name} onClose={() => setShowRecModal(false)} />
+            )}
+            {showCallModal && (
+                <ScheduleCallModal clientId={id} clientName={client.name} onClose={() => setShowCallModal(false)} />
+            )}
+            {showFlagModal && (
+                <FlagForReviewModal clientId={id} clientName={client.name} onClose={() => setShowFlagModal(false)} />
+            )}
 
         </div>
     );

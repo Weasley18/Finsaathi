@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Typography, Layout } from '../constants/theme';
+import { colors, typography, spacing } from '../theme';
 import { ShoppingBag, Landmark, ChevronRight, CheckCircle, ExternalLink, Star } from 'lucide-react-native';
 import api from '../services/api';
 
@@ -68,14 +68,14 @@ export default function DiscoverMarketplace({ navigation }) {
             <View key={product.id} style={[styles.card, product.isEligible && styles.cardHighlight]}>
                 {product.isEligible && (
                     <View style={styles.badgeContainer}>
-                        <Star size={12} color={Colors.white} fill={Colors.white} />
+                        <Star size={12} color={colors.white} fill={colors.white} />
                         <Text style={styles.badgeText}>Recommended: {product.matchReason}</Text>
                     </View>
                 )}
 
                 <View style={styles.cardHeader}>
                     <View style={styles.iconContainer}>
-                        <ShoppingBag size={24} color={Colors.primary} />
+                        <ShoppingBag size={24} color={colors.accent} />
                     </View>
                     <View style={styles.cardHeaderTexts}>
                         <Text style={styles.cardTitle}>{product.name}</Text>
@@ -111,11 +111,11 @@ export default function DiscoverMarketplace({ navigation }) {
                 >
                     {product.hasApplied ? (
                         <>
-                            <CheckCircle size={18} color={Colors.white} />
+                            <CheckCircle size={18} color={colors.white} />
                             <Text style={styles.actionButtonText}>Applied</Text>
                         </>
                     ) : (
-                        <Text style={[styles.actionButtonText, !product.isEligible && { color: Colors.text }]}>
+                        <Text style={[styles.actionButtonText, !product.isEligible && { color: colors.textPrimary }]}>
                             Apply Now
                         </Text>
                     )}
@@ -129,7 +129,7 @@ export default function DiscoverMarketplace({ navigation }) {
             <View key={scheme.id} style={[styles.card, scheme.isEligible && styles.cardHighlight]}>
                 {scheme.isEligible && (
                     <View style={[styles.badgeContainer, { backgroundColor: '#2e7d32' }]}>
-                        <CheckCircle size={12} color={Colors.white} />
+                        <CheckCircle size={12} color={colors.white} />
                         <Text style={styles.badgeText}>Eligible: {scheme.matchReason}</Text>
                     </View>
                 )}
@@ -156,8 +156,8 @@ export default function DiscoverMarketplace({ navigation }) {
                         style={[styles.actionButton, styles.actionButtonOutline]}
                         onPress={() => openLink(scheme.link)}
                     >
-                        <Text style={[styles.actionButtonText, { color: Colors.primary }]}>Learn More</Text>
-                        <ExternalLink size={16} color={Colors.primary} style={{ marginLeft: 8 }} />
+                        <Text style={[styles.actionButtonText, { color: colors.accent }]}>Learn More</Text>
+                        <ExternalLink size={16} color={colors.accent} style={{ marginLeft: 8 }} />
                     </TouchableOpacity>
                 )}
             </View>
@@ -176,7 +176,7 @@ export default function DiscoverMarketplace({ navigation }) {
                     style={[styles.tab, activeTab === 'products' && styles.activeTab]}
                     onPress={() => setActiveTab('products')}
                 >
-                    <ShoppingBag size={18} color={activeTab === 'products' ? Colors.white : Colors.textMuted} />
+                    <ShoppingBag size={18} color={activeTab === 'products' ? colors.white : colors.textMuted} />
                     <Text style={[styles.tabText, activeTab === 'products' && styles.activeTabText]}>Partner Products</Text>
                 </TouchableOpacity>
 
@@ -184,14 +184,14 @@ export default function DiscoverMarketplace({ navigation }) {
                     style={[styles.tab, activeTab === 'schemes' && styles.activeTab]}
                     onPress={() => setActiveTab('schemes')}
                 >
-                    <Landmark size={18} color={activeTab === 'schemes' ? Colors.white : Colors.textMuted} />
+                    <Landmark size={18} color={activeTab === 'schemes' ? colors.white : colors.textMuted} />
                     <Text style={[styles.tabText, activeTab === 'schemes' && styles.activeTabText]}>Govt. Schemes</Text>
                 </TouchableOpacity>
             </View>
 
             {loading ? (
                 <View style={styles.centerBox}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
+                    <ActivityIndicator size="large" color={colors.accent} />
                 </View>
             ) : (
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -218,24 +218,24 @@ export default function DiscoverMarketplace({ navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: colors.background,
     },
     header: {
-        padding: Layout.screenPadding,
+        padding: spacing.md,
         paddingBottom: 16,
     },
     headerTitle: {
-        ...Typography.h1,
-        color: Colors.text,
+        ...typography.heading1,
+        color: colors.textPrimary,
     },
     headerSubtitle: {
-        ...Typography.body,
-        color: Colors.textMuted,
+        ...typography.body,
+        color: colors.textMuted,
         marginTop: 4,
     },
     tabContainer: {
         flexDirection: 'row',
-        paddingHorizontal: Layout.screenPadding,
+        paddingHorizontal: spacing.md,
         marginBottom: 16,
     },
     tab: {
@@ -248,15 +248,15 @@ const styles = StyleSheet.create({
         borderBottomColor: 'transparent',
     },
     activeTab: {
-        borderBottomColor: Colors.primary,
+        borderBottomColor: colors.accent,
     },
     tabText: {
-        ...Typography.subtitle,
-        color: Colors.textMuted,
+        ...typography.bodySmall,
+        color: colors.textMuted,
         marginLeft: 8,
     },
     activeTabText: {
-        color: Colors.white,
+        color: colors.white,
     },
     centerBox: {
         flex: 1,
@@ -264,24 +264,24 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     scrollContent: {
-        padding: Layout.screenPadding,
+        padding: spacing.md,
     },
     card: {
-        backgroundColor: Colors.surface,
-        borderRadius: Layout.borderRadius.lg,
+        backgroundColor: colors.surface,
+        borderRadius: 20,
         padding: 20,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: Colors.border,
+        borderColor: colors.cardBorder,
     },
     cardHighlight: {
-        borderColor: Colors.primary,
+        borderColor: colors.accent,
         backgroundColor: 'rgba(212, 175, 55, 0.03)', // very subtle gold tint
     },
     badgeContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.primary,
+        backgroundColor: colors.accent,
         alignSelf: 'flex-start',
         paddingHorizontal: 10,
         paddingVertical: 4,
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     badgeText: {
-        color: Colors.border, // Very dark near black for contrast on gold
+        color: colors.cardBorder, // Very dark near black for contrast on gold
         fontSize: 12,
         fontWeight: 'bold',
         marginLeft: 6,
@@ -312,18 +312,18 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     cardTitle: {
-        ...Typography.h3,
-        color: Colors.text,
+        ...typography.heading3,
+        color: colors.textPrimary,
         marginBottom: 2,
     },
     cardSubtitle: {
         fontSize: 12,
-        color: Colors.textMuted,
+        color: colors.textMuted,
         fontWeight: '600',
     },
     cardDescription: {
-        ...Typography.body,
-        color: Colors.text,
+        ...typography.body,
+        color: colors.textPrimary,
         opacity: 0.8,
         marginBottom: 16,
         lineHeight: 20,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     cardStats: {
         flexDirection: 'row',
         backgroundColor: 'rgba(0,0,0,0.2)',
-        borderRadius: Layout.borderRadius.md,
+        borderRadius: 16,
         padding: 12,
         marginBottom: 16,
     },
@@ -340,17 +340,17 @@ const styles = StyleSheet.create({
     },
     statLabel: {
         fontSize: 12,
-        color: Colors.textMuted,
+        color: colors.textMuted,
         marginBottom: 4,
     },
     statValue: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: colors.accent,
     },
     benefitsBox: {
         backgroundColor: 'rgba(0,0,0,0.2)',
-        borderRadius: Layout.borderRadius.md,
+        borderRadius: 16,
         padding: 12,
         marginBottom: 16,
         borderLeftWidth: 3,
@@ -364,28 +364,28 @@ const styles = StyleSheet.create({
     },
     benefitsText: {
         fontSize: 14,
-        color: Colors.text,
+        color: colors.textPrimary,
         lineHeight: 20,
     },
     actionButton: {
         flexDirection: 'row',
         paddingVertical: 14,
-        borderRadius: Layout.borderRadius.md,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
     },
     actionButtonPrimary: {
-        backgroundColor: Colors.primary,
+        backgroundColor: colors.accent,
     },
     actionButtonSecondary: {
-        backgroundColor: Colors.surface,
+        backgroundColor: colors.surface,
         borderWidth: 1,
-        borderColor: Colors.border,
+        borderColor: colors.cardBorder,
     },
     actionButtonOutline: {
         backgroundColor: 'transparent',
         borderWidth: 1,
-        borderColor: Colors.primary,
+        borderColor: colors.accent,
     },
     actionButtonDisabled: {
         backgroundColor: '#2e7d32', // Green for applied success state
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     actionButtonText: {
         fontWeight: 'bold',
         fontSize: 15,
-        color: Colors.background, // Dark text on primary button
+        color: colors.background, // Dark text on primary button
         marginLeft: 8,
     },
     emptyBox: {
@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     emptyText: {
-        color: Colors.textMuted,
+        color: colors.textMuted,
         textAlign: 'center',
     }
 });

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
@@ -19,6 +20,11 @@ import { notificationRoutes } from './routes/notifications.js';
 import { partnerRoutes } from './routes/partners.js';
 import { adminRoutes } from './routes/admin.js';
 import { gamificationRoutes } from './routes/gamification.js';
+import { messageRoutes } from './routes/messages.js';
+import { recommendationRoutes } from './routes/recommendations.js';
+import { callRoutes } from './routes/calls.js';
+import { flagRoutes } from './routes/flags.js';
+import { chatroomRoutes } from './routes/chatrooms.js';
 
 // ─── Prisma Client ──────────────────────────────────────────────
 export const prisma = new PrismaClient();
@@ -80,6 +86,11 @@ async function main() {
     app.register(notificationRoutes, { prefix: '/api/notifications' });
     app.register(partnerRoutes, { prefix: '/api/partners' });
     app.register(adminRoutes, { prefix: '/api/admin' });
+    app.register(messageRoutes, { prefix: '/api/messages' });
+    app.register(recommendationRoutes, { prefix: '/api/recommendations' });
+    app.register(callRoutes, { prefix: '/api/calls' });
+    app.register(flagRoutes, { prefix: '/api/flags' });
+    app.register(chatroomRoutes, { prefix: '/api/chatrooms' });
 
     // ─── Health Check ──────────────────────────────────────────
     app.get('/api/health', async () => ({
