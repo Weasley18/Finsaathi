@@ -240,9 +240,9 @@ export default function AdvisorDashboard() {
                             <button className="btn btn-secondary" style={{ justifyContent: 'center' }} onClick={() => navigate('/advisor/messages')}>
                                 <Users size={18} /> Messages
                             </button>
-                            <button className="btn btn-secondary" style={{ justifyContent: 'center' }}>
+                            {/* <button className="btn btn-secondary" style={{ justifyContent: 'center' }}>
                                 <Target size={18} /> Create Goal Plan
-                            </button>
+                            </button> */}
                         </div>
                     </div>
 
