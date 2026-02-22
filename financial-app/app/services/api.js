@@ -165,7 +165,7 @@ api.getAdaptiveBudget = () => api.get('/insights/adaptive-budget');
 api.getCategoryInsights = () => api.get('/insights/category-insights');
 
 // ─── SMS Parsing ────────────────────────────────────────────
-api.parseSms = (message) => api.post('/transactions/parse-sms', { message });
+api.parseSms = (text) => api.post('/transactions/parse-sms', { text });
 api.batchParseSms = (messages) => api.post('/transactions/parse-sms/batch', { messages });
 api.importSms = (messages) => api.post('/transactions/import-sms', { messages });
 
