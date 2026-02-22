@@ -26,7 +26,7 @@ Generate a bite-sized financial literacy lesson on the given topic.
 ${contextStr}
 
 RULES:
-- Use simple Hindi-English (Hinglish) examples when helpful
+- Respond ONLY in English. DO NOT use Hinglish or Hindi words.
 - Include ₹ amounts relevant to Indian context
 - Use relatable examples (chai, auto-rickshaw, kirana store, festival shopping)
 - Keep it practical and actionable
@@ -83,6 +83,7 @@ export async function generateQuizzes(
 Generate ${count} multiple-choice quiz questions based on the lesson content provided.
 
 RULES:
+- Respond ONLY in English. DO NOT use Hinglish or Hindi words.
 - Each question should test understanding, not just recall
 - Use practical Indian financial context in options
 - Include one clearly correct answer and 3 plausible distractors
@@ -152,14 +153,14 @@ export async function suggestTopics(userId: string): Promise<Array<{
         where: { userId },
         include: { lesson: { select: { category: true, title: true } } },
     });
-    const completedCategories = completedLessons.map(lp => lp.lesson.category);
+    const completedCategories = completedLessons.map((lp: any) => lp.lesson.category);
 
     // Build context string
-    const topCategories = transactions.reduce((acc: Record<string, number>, t) => {
+    const topCategories = transactions.reduce((acc: Record<string, number>, t: any) => {
         acc[t.category] = (acc[t.category] || 0) + t.amount;
         return acc;
     }, {});
-    const topSpending = Object.entries(topCategories)
+    const topSpending = (Object.entries(topCategories) as [string, number][])
         .sort(([, a], [, b]) => b - a)
         .slice(0, 5)
         .map(([cat, amt]) => `${cat}: ₹${Math.round(amt)}`)
@@ -168,13 +169,14 @@ export async function suggestTopics(userId: string): Promise<Array<{
     const context = `
 User profile: Income ${user?.incomeRange || 'unknown'}, Risk ${user?.riskProfile || 'unknown'}
 Top spending: ${topSpending || 'No data yet'}
-Active goals: ${goals.length > 0 ? goals.map(g => g.name).join(', ') : 'None'}
+Active goals: ${goals.length > 0 ? goals.map((g: any) => g.name).join(', ') : 'None'}
 Budgets set: ${budgets.length}
 Health score: ${profile?.healthScore || 'Not calculated'}
 Already completed categories: ${completedCategories.join(', ') || 'None'}
 `;
 
     const systemPrompt = `You are a financial education advisor for FinSaathi.
+Respond ONLY in English. DO NOT use Hinglish or Hindi words.
 Based on the user's financial profile, suggest 5 personalized lesson topics they should learn next.
 Focus on their weak areas and financial pain points.
 
