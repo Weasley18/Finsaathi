@@ -136,6 +136,21 @@ export const api = {
     approveUser: (userId) => apiFetch(`/admin/approve/${userId}`, { method: 'POST', body: JSON.stringify({}) }),
     rejectUser: (userId, reason) => apiFetch(`/admin/reject/${userId}`, { method: 'POST', body: JSON.stringify({ reason }) }),
 
+    // Documents (Admin)
+    getUserDocuments: (userId) => apiFetch(`/documents/user/${userId}`),
+    verifyDocument: (docId, status, reviewNote) => apiFetch(`/documents/${docId}/verify`, { method: 'PUT', body: JSON.stringify({ status, reviewNote }) }),
+    downloadDocumentUrl: (docId, userId) => `${BASE_URL}/documents/${docId}/download?userId=${userId}`,
+    downloadDocument: async (docId, userId) => {
+        const res = await fetch(`${BASE_URL}/documents/${docId}/download?userId=${userId}`, {
+            headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || 'Download failed');
+        }
+        return res.blob();
+    },
+
     // Content (Lessons/Schemes)
     getAllLessons: (filters = {}) => {
         const query = new URLSearchParams(filters).toString();
@@ -152,6 +167,7 @@ export const api = {
 
     // Content Generation & Quizzes
     generateLesson: (topic, difficulty, userContext) => apiFetch('/content/generate', { method: 'POST', body: JSON.stringify({ topic, difficulty, userContext }) }),
+    generateLessonForUser: (topic, difficulty) => apiFetch('/content/learn/generate', { method: 'POST', body: JSON.stringify({ topic, difficulty }) }),
     publishLesson: (id) => apiFetch(`/content/generate/publish/${id}`, { method: 'POST' }),
     getContentSuggestions: () => apiFetch('/content/suggestions'),
     getLessonQuizzes: (lessonId) => apiFetch(`/content/lessons/${lessonId}/quizzes`),

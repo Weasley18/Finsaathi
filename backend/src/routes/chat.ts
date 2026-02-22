@@ -38,7 +38,9 @@ export async function chatRoutes(app: FastifyInstance) {
         }
 
         // ─── Multilingual: Detect & Translate ─────────────────────
-        const userLang = request.user.language !== 'en' ? request.user.language : undefined;
+        const headerLang = request.headers['x-user-language'] as string | undefined;
+        const effectiveLang = headerLang || request.user.language;
+        const userLang = effectiveLang !== 'en' ? effectiveLang : undefined;
         const translationCtx = await preProcessMessage(message, userLang);
         const englishMessage = translationCtx.translatedInput;
 

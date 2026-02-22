@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../api';
 import {
     MessageSquare, Upload, CheckCircle, AlertTriangle, ArrowRight,
-    Trash2, IndianRupee, Clock, FileText, Smartphone, RefreshCw
+    Trash2, IndianRupee, Clock, FileText, Smartphone, RefreshCw, Save
 } from 'lucide-react';
 
 const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -16,17 +16,49 @@ export default function TransactionImportPage() {
     const [importResult, setImportResult] = useState(null);
     const [loading, setLoading] = useState(false);
     const [importing, setImporting] = useState(false);
+    const [saved, setSaved] = useState(false);
 
     // ─── Single SMS Parse ───
     const handleParseSingle = async () => {
         if (!smsText.trim()) return;
         setLoading(true);
         setParsed(null);
+        setSaved(false);
         try {
             const data = await api.parseSms(smsText.trim());
             setParsed(data);
         } catch { setParsed({ error: 'Failed to parse SMS' }); }
         finally { setLoading(false); }
+    };
+
+    // ─── Save Single Parsed Transaction ───
+    const handleSaveSingle = async () => {
+        if (!parsed?.transaction) return;
+        setImporting(true);
+        try {
+            const t = parsed.transaction;
+            // Use parsed date if reasonable (within last 2 years), otherwise use today
+            let txDate = new Date().toISOString();
+            if (t.date) {
+                const pd = new Date(t.date);
+                const twoYearsAgo = new Date();
+                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+                if (!isNaN(pd.getTime()) && pd > twoYearsAgo && pd <= new Date()) {
+                    txDate = pd.toISOString();
+                }
+            }
+            await api.createTransaction({
+                amount: t.amount,
+                type: t.type === 'TRANSFER' ? 'EXPENSE' : t.type,
+                category: t.category || 'Other',
+                merchant: t.merchant || '',
+                description: t.description || smsText.trim().substring(0, 200),
+                source: t.source || 'SMS',
+                date: txDate,
+            });
+            setSaved(true);
+        } catch { setParsed(prev => ({ ...prev, saveError: 'Failed to save transaction' })); }
+        finally { setImporting(false); }
     };
 
     // ─── Batch Parse ───
@@ -175,6 +207,27 @@ export default function TransactionImportPage() {
                                                 <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Reference</span>
                                                 <div style={{ fontWeight: 600, fontSize: 12 }}>{parsed.transaction.reference}</div>
                                             </div>
+                                        )}
+                                    </div>
+                                    {/* Save button */}
+                                    <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        {saved ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4CAF50', fontWeight: 600, fontSize: 14 }}>
+                                                <CheckCircle size={16} /> Transaction saved successfully!
+                                            </div>
+                                        ) : (
+                                            <button onClick={handleSaveSingle} disabled={importing} style={{
+                                                padding: '10px 24px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                                                background: 'var(--accent)', color: '#000', fontWeight: 600,
+                                                display: 'flex', alignItems: 'center', gap: 6, fontSize: 14,
+                                                opacity: importing ? 0.6 : 1,
+                                            }}>
+                                                {importing ? <RefreshCw size={14} className="spin" /> : <Save size={14} />}
+                                                {importing ? 'Saving...' : 'Save Transaction'}
+                                            </button>
+                                        )}
+                                        {parsed.saveError && (
+                                            <span style={{ color: '#F44336', fontSize: 13 }}>{parsed.saveError}</span>
                                         )}
                                     </div>
                                 </>

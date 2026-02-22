@@ -86,7 +86,29 @@ function extractBalance(text: string): number | undefined {
 function extractDate(text: string): Date {
     const match = text.match(DATE_PATTERN);
     if (match) {
-        const parsed = new Date(match[1]);
+        const raw = match[1];
+        const parts = raw.split(/[\/-]/);
+        if (parts.length === 3) {
+            let [a, b, c] = parts.map(Number);
+            // Indian SMS format: DD-MM-YY or DD/MM/YY or DD-MM-YYYY
+            if (c < 100) c += 2000; // 25 → 2025
+            // a=day, b=month, c=year (Indian format DD-MM-YY)
+            if (a > 12) {
+                // a must be day (>12), b is month
+                const d = new Date(c, b - 1, a);
+                if (!isNaN(d.getTime())) return d;
+            }
+            // b > 12 means b is day, a is month (MM-DD-YY, unlikely for Indian SMS)
+            if (b > 12) {
+                const d = new Date(c, a - 1, b);
+                if (!isNaN(d.getTime())) return d;
+            }
+            // Ambiguous (both ≤12): assume DD-MM-YY (Indian default)
+            const d = new Date(c, b - 1, a);
+            if (!isNaN(d.getTime())) return d;
+        }
+        // Fallback
+        const parsed = new Date(raw);
         return isNaN(parsed.getTime()) ? new Date() : parsed;
     }
     return new Date();

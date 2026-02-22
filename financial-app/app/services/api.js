@@ -32,13 +32,13 @@ api.interceptors.request.use(
         if (authToken) {
             config.headers.Authorization = `Bearer ${authToken}`;
         }
-        // Add language header for server-side translation
+        // Always send language header so backend uses the app's current locale
         try {
             const lang = await AsyncStorage.getItem('finsaathi_language');
-            if (lang && lang !== 'en') {
-                config.headers['X-User-Language'] = lang;
-            }
-        } catch (e) { /* ignore */ }
+            config.headers['X-User-Language'] = lang || 'en';
+        } catch (e) {
+            config.headers['X-User-Language'] = 'en';
+        }
         return config;
     },
     (error) => Promise.reject(error)

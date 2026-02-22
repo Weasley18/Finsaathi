@@ -22,7 +22,10 @@ export function createTranslationHook(config: TranslatableConfig) {
         reply: FastifyReply,
         payload: string
     ): Promise<string> {
-        const lang = (request as any).user?.language;
+        // Prefer X-User-Language header (app's current locale) over JWT language
+        const lang =
+            (request.headers['x-user-language'] as string) ||
+            (request as any).user?.language;
 
         // Skip if no auth, English, or unsupported language
         if (!lang || lang === 'en' || !SUPPORTED_LANGUAGES[lang]) {
@@ -82,8 +85,8 @@ async function translateObjectFields(
  */
 export function getUserLanguage(request: FastifyRequest & { user?: any }): string {
     return (
-        (request as any).user?.language ||
         (request.headers['x-user-language'] as string) ||
+        (request as any).user?.language ||
         (request.headers['accept-language']?.split(',')[0]?.split('-')[0]) ||
         'en'
     );

@@ -91,7 +91,10 @@ export async function documentRoutes(app: FastifyInstance) {
             reply.header('Content-Type', 'application/octet-stream');
             reply.header('Content-Disposition', `attachment; filename="${doc.fileName}"`);
             return reply.send(originalBuffer);
-        } catch (err) {
+        } catch (err: any) {
+            if (err.code === 'ENOENT') {
+                return reply.status(404).send({ error: 'File not found on disk. The document record exists but the physical file is missing.' });
+            }
             app.log.error(err, 'Failed to download document:');
             return reply.status(500).send({ error: 'Failed to retrieve document' });
         }

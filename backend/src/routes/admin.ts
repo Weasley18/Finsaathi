@@ -119,6 +119,16 @@ export async function adminRoutes(app: FastifyInstance) {
             where: {
                 userId: { in: users.map(u => u.id) },
             },
+            select: {
+                id: true,
+                userId: true,
+                type: true,
+                fileName: true,
+                status: true,
+                reviewNote: true,
+                uploadedAt: true,
+            },
+            orderBy: { uploadedAt: 'desc' },
         });
 
         const usersWithDocs = users.map(user => ({

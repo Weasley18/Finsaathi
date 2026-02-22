@@ -54,7 +54,7 @@ export default function LanguageSelection({ navigation }) {
 
       <View style={styles.content}>
         <Text style={styles.title}>Choose Your Language</Text>
-        <Text style={styles.subtitle}>अपनी भाषा चुनें</Text>
+        <Text style={styles.subtitle}>Select your preferred language</Text>
 
         <ScrollView
           style={styles.chipContainer}

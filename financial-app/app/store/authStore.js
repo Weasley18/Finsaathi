@@ -73,6 +73,11 @@ const useAuthStore = create(
                     const { user } = get();
                     const { data } = await api.put('/users/profile', profileData);
                     set({ user: { ...user, ...profileData } });
+                    // If backend re-issued JWT (e.g. language changed), update the token
+                    if (data.token) {
+                        set({ token: data.token });
+                        setApiToken(data.token);
+                    }
                     return data;
                 } catch (error) {
                     throw error;
