@@ -32,7 +32,7 @@ const StatCard = ({ label, value, trend, icon: Icon, color = 'var(--accent-light
     </div>
 );
 
-const ClientRow = ({ client, onView }) => {
+const ClientRow = ({ client, onView, goalCount }) => {
     const healthScore = client.healthScore || 0;
     let healthColor = 'var(--error)';
     if (healthScore >= 70) healthColor = 'var(--success)';
@@ -63,10 +63,9 @@ const ClientRow = ({ client, onView }) => {
                 </div>
             </td>
             <td>
-                {/* Mock Data for now */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
                     <Target size={14} color="var(--accent)" />
-                    {Math.floor(Math.random() * 3) + 1} Goals
+                    {goalCount} {goalCount === 1 ? 'Goal' : 'Goals'}
                 </div>
             </td>
             <td>
@@ -89,6 +88,9 @@ export default function AdvisorDashboard() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('ALL'); // ALL, ACTIVE, RISK, NEW
     const [user, setUser] = useState(null);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [advisorStats, setAdvisorStats] = useState({ activeGoals: 0, recommendations: 0, clientGoals: {} });
 
     useEffect(() => {
         loadData();
@@ -99,8 +101,18 @@ export default function AdvisorDashboard() {
             const me = await api.getMe();
             setUser(me.user || me);
 
-            const res = await api.getAdvisorClients(me.user?.id || me.id);
+            const advisorId = me.user?.id || me.id;
+            const res = await api.getAdvisorClients(advisorId);
             setClients(res.clients || []);
+
+            // Load real stats (goals, recommendations counts)
+            const statsRes = await api.getAdvisorStats(advisorId).catch(() => ({ activeGoals: 0, recommendations: 0, clientGoals: {} }));
+            setAdvisorStats(statsRes);
+
+            // Load live notifications
+            const notifRes = await api.getNotifications(5).catch(() => ({ notifications: [], unreadCount: 0 }));
+            setNotifications(notifRes.notifications || []);
+            setUnreadCount(notifRes.unreadCount || 0);
         } catch (err) {
             console.error("Failed to load advisor data", err);
         } finally {
@@ -111,16 +123,20 @@ export default function AdvisorDashboard() {
     const filteredClients = clients.filter(c => {
         if (filter === 'RISK') return (c.healthScore || 0) < 40;
         if (filter === 'ACTIVE') return (c.healthScore || 0) >= 40;
-        // New logic could be based on created date, mocking for now
-        if (filter === 'NEW') return false;
+        if (filter === 'NEW') {
+            const assigned = new Date(c.assignedAt);
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            return assigned >= thirtyDaysAgo;
+        }
         return true;
     });
 
     const stats = {
         totalClients: clients.length,
         avgHealth: clients.length ? Math.round(clients.reduce((acc, c) => acc + (c.healthScore || 0), 0) / clients.length) : 0,
-        activeGoals: 128, // Mock
-        recommendations: 89 // Mock
+        activeGoals: advisorStats.activeGoals || 0,
+        recommendations: advisorStats.recommendations || 0,
     };
 
     if (loading) return <div style={{ padding: 40, color: 'var(--text-muted)' }}>Loading Dashboard...</div>;
@@ -134,17 +150,17 @@ export default function AdvisorDashboard() {
                     <p>Welcome back, {user?.name}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 12 }}>
-                    <button className="btn btn-secondary">
+                    <button className="btn btn-secondary" onClick={() => navigate('/notifications')}>
                         <Bell size={18} /> Notifications
-                        <span className="badge badge-error" style={{ marginLeft: 6, padding: '2px 6px' }}>3</span>
+                        {unreadCount > 0 && <span className="badge badge-error" style={{ marginLeft: 6, padding: '2px 6px' }}>{unreadCount}</span>}
                     </button>
                 </div>
             </header>
 
             {/* ─── KPI Stats ─── */}
             <div className="stats-grid">
-                <StatCard label="Total Clients" value={stats.totalClients} trend={12} icon={Users} />
-                <StatCard label="Avg Health Score" value={stats.avgHealth} trend={5} icon={Target} color="var(--success)" />
+                <StatCard label="Total Clients" value={stats.totalClients} icon={Users} />
+                <StatCard label="Avg Health Score" value={stats.avgHealth} icon={Target} color="var(--success)" />
                 <StatCard label="Active Goals" value={stats.activeGoals} icon={TrendingUp} color="var(--info)" />
                 <StatCard label="Recommendations" value={stats.recommendations} icon={Send} color="var(--warning)" />
             </div>
@@ -197,7 +213,7 @@ export default function AdvisorDashboard() {
                             </thead>
                             <tbody>
                                 {filteredClients.map(client => (
-                                    <ClientRow key={client.id} client={client} onView={(c) => navigate(`/advisor/client/${c.id}`)} />
+                                    <ClientRow key={client.id} client={client} goalCount={advisorStats.clientGoals?.[client.id] || 0} onView={(c) => navigate(`/advisor/client/${c.id}`)} />
                                 ))}
                                 {filteredClients.length === 0 && (
                                     <tr>
@@ -218,11 +234,11 @@ export default function AdvisorDashboard() {
                     <div className="glass-card">
                         <h3 className="section-title">Quick Actions</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <button className="btn btn-primary" style={{ justifyContent: 'center' }}>
-                                <Send size={18} /> Send Recommendation
+                            <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={() => navigate('/advisor/copilot')}>
+                                <Send size={18} /> AI Co-Pilot
                             </button>
-                            <button className="btn btn-secondary" style={{ justifyContent: 'center' }}>
-                                <Users size={18} /> Add New Client
+                            <button className="btn btn-secondary" style={{ justifyContent: 'center' }} onClick={() => navigate('/advisor/messages')}>
+                                <Users size={18} /> Messages
                             </button>
                             <button className="btn btn-secondary" style={{ justifyContent: 'center' }}>
                                 <Target size={18} /> Create Goal Plan
@@ -230,20 +246,16 @@ export default function AdvisorDashboard() {
                         </div>
                     </div>
 
-                    {/* Alerts */}
+                    {/* Live Alerts */}
                     <div className="glass-card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                             <h3 className="section-title" style={{ marginBottom: 0 }}>Alerts</h3>
-                            <span className="badge badge-error">3 Priority</span>
+                            {unreadCount > 0 && <span className="badge badge-error">{unreadCount} New</span>}
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                            {[
-                                { name: 'Rakesh S.', issue: 'Budget exceeded by 20%', time: '2h ago' },
-                                { name: 'Meena K.', issue: 'Missed SIP payment', time: '5h ago' },
-                                { name: 'Anil T.', issue: 'Emergency fund low', time: '1d ago' },
-                            ].map((alert, i) => (
-                                <div key={i} style={{ display: 'flex', gap: 12, paddingBottom: 12, borderBottom: '1px solid var(--divider)' }}>
+                            {notifications.length > 0 ? notifications.slice(0, 5).map((notif) => (
+                                <div key={notif.id} style={{ display: 'flex', gap: 12, paddingBottom: 12, borderBottom: '1px solid var(--divider)' }}>
                                     <div style={{
                                         minWidth: 32, height: 32, borderRadius: 8, background: 'rgba(231,76,60,0.1)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)'
@@ -251,13 +263,24 @@ export default function AdvisorDashboard() {
                                         <AlertTriangle size={16} />
                                     </div>
                                     <div>
-                                        <div style={{ fontSize: 14, fontWeight: 600 }}>{alert.name}</div>
-                                        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{alert.issue}</div>
-                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>{alert.time}</div>
+                                        <div style={{ fontSize: 14, fontWeight: 600 }}>{notif.title}</div>
+                                        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{notif.message}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                                            {new Date(notif.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        </div>
                                     </div>
                                 </div>
-                            ))}
+                            )) : (
+                                <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
+                                    No alerts — all looking good! ✨
+                                </div>
+                            )}
                         </div>
+                        {notifications.length > 0 && (
+                            <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={() => navigate('/notifications')}>
+                                View All Notifications
+                            </button>
+                        )}
                     </div>
 
                 </div>

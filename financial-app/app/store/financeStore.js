@@ -24,10 +24,18 @@ const useFinanceStore = create((set, get) => ({
     healthScore: null,
     spendingInsights: null,
     lessons: [],
+    anomalies: null,
+    forecast: null,
+    adaptiveBudget: null,
+    learningProgress: null,
+    leaderboard: [],
 
     // Chat
     chatMessages: [],
     chatLoading: false,
+    chatRooms: [],
+    activeChatRoomId: null,
+    chatRoomsLoading: false,
 
     // ─── Dashboard ─────────────────────────────────────────────
     fetchDashboard: async () => {
@@ -159,18 +167,144 @@ const useFinanceStore = create((set, get) => ({
 
     fetchLessons: async () => {
         try {
-            const { data } = await api.get('/insights/lessons');
+            const { data } = await api.get('/content/lessons');
             set({ lessons: data.lessons });
         } catch (error) {
             console.error('Lessons error:', error);
         }
     },
 
-    // ─── Chat ──────────────────────────────────────────────────
-    fetchChatHistory: async () => {
+    // ─── Predictive Analysis ───────────────────────────────────
+    fetchAnomalies: async () => {
         try {
-            const { data } = await api.get('/chat/history');
-            set({ chatMessages: data.messages });
+            const { data } = await api.getAnomalies();
+            set({ anomalies: data });
+            return data;
+        } catch (error) {
+            console.error('Anomalies error:', error);
+        }
+    },
+
+    fetchForecast: async (days = 30) => {
+        try {
+            const { data } = await api.getForecast(days);
+            set({ forecast: data });
+            return data;
+        } catch (error) {
+            console.error('Forecast error:', error);
+        }
+    },
+
+    fetchAdaptiveBudget: async () => {
+        try {
+            const { data } = await api.getAdaptiveBudget();
+            set({ adaptiveBudget: data });
+            return data;
+        } catch (error) {
+            console.error('Adaptive budget error:', error);
+        }
+    },
+
+    // ─── Learning Progress ─────────────────────────────────────
+    fetchLearningProgress: async () => {
+        try {
+            const { data } = await api.getLearningProgress();
+            set({ learningProgress: data });
+            return data;
+        } catch (error) {
+            console.error('Learning progress error:', error);
+        }
+    },
+
+    fetchLeaderboard: async () => {
+        try {
+            const { data } = await api.getLeaderboard();
+            set({ leaderboard: data.leaderboard || [] });
+            return data;
+        } catch (error) {
+            console.error('Leaderboard error:', error);
+        }
+    },
+
+    // ─── Chat Rooms ─────────────────────────────────────────────
+    fetchChatRooms: async (type) => {
+        set({ chatRoomsLoading: true });
+        try {
+            const { data } = await api.getChatRooms(type);
+            set({ chatRooms: data.rooms || [], chatRoomsLoading: false });
+            return data.rooms || [];
+        } catch (error) {
+            set({ chatRoomsLoading: false });
+            console.error('Chat rooms error:', error);
+            return [];
+        }
+    },
+
+    createChatRoom: async (type) => {
+        try {
+            const { data } = await api.createChatRoom(type);
+            const newRoom = data.room;
+            set((state) => ({
+                chatRooms: [newRoom, ...state.chatRooms],
+                activeChatRoomId: newRoom.id,
+                chatMessages: [],
+            }));
+            return newRoom;
+        } catch (error) {
+            console.error('Create room error:', error);
+        }
+    },
+
+    selectChatRoom: async (roomId) => {
+        set({ activeChatRoomId: roomId, chatMessages: [] });
+        if (roomId) {
+            try {
+                const { data } = await api.getChatHistory(roomId);
+                set({ chatMessages: data.messages || [] });
+            } catch (error) {
+                console.error('Room history error:', error);
+            }
+        }
+    },
+
+    deleteChatRoom: async (roomId) => {
+        try {
+            await api.deleteChatRoom(roomId);
+            const { chatRooms, activeChatRoomId } = get();
+            const remaining = chatRooms.filter(r => r.id !== roomId);
+            const updates = { chatRooms: remaining };
+            if (activeChatRoomId === roomId) {
+                updates.activeChatRoomId = remaining.length > 0 ? remaining[0].id : null;
+                updates.chatMessages = [];
+                if (remaining.length > 0) {
+                    try {
+                        const { data } = await api.getChatHistory(remaining[0].id);
+                        updates.chatMessages = data.messages || [];
+                    } catch { }
+                }
+            }
+            set(updates);
+        } catch (error) {
+            console.error('Delete room error:', error);
+        }
+    },
+
+    renameChatRoom: async (roomId, title) => {
+        try {
+            await api.renameChatRoom(roomId, title);
+            set((state) => ({
+                chatRooms: state.chatRooms.map(r => r.id === roomId ? { ...r, title } : r),
+            }));
+        } catch (error) {
+            console.error('Rename room error:', error);
+        }
+    },
+
+    // ─── Chat ──────────────────────────────────────────────────
+    fetchChatHistory: async (roomId) => {
+        try {
+            const { data } = await api.getChatHistory(roomId);
+            set({ chatMessages: data.messages || [] });
         } catch (error) {
             console.error('Chat history error:', error);
         }
@@ -178,6 +312,7 @@ const useFinanceStore = create((set, get) => ({
 
     sendChatMessage: async (message) => {
         set({ chatLoading: true });
+        const { activeChatRoomId } = get();
 
         // Optimistic add user message
         const userMsg = {
@@ -192,7 +327,16 @@ const useFinanceStore = create((set, get) => ({
         }));
 
         try {
-            const { data } = await api.post('/chat', { message });
+            const { data } = await api.sendChatMessage(message, activeChatRoomId);
+
+            // Update active room if we got one back
+            if (!activeChatRoomId && data.chatRoomId) {
+                set({ activeChatRoomId: data.chatRoomId });
+                // Refresh rooms list after title is generated
+                setTimeout(() => get().fetchChatRooms('AI_CHAT'), 1500);
+            } else {
+                setTimeout(() => get().fetchChatRooms('AI_CHAT'), 1500);
+            }
 
             const aiMsg = {
                 id: data.messageId,
@@ -211,10 +355,9 @@ const useFinanceStore = create((set, get) => ({
         } catch (error) {
             set({ chatLoading: false });
 
-            // Add error message
             const errMsg = {
                 id: (Date.now() + 1).toString(),
-                content: 'Sorry, I could not process your request. Please try again. 🙏',
+                content: 'Sorry, I could not process your request. Please try again.',
                 role: 'assistant',
                 createdAt: new Date().toISOString(),
             };
@@ -227,8 +370,8 @@ const useFinanceStore = create((set, get) => ({
         }
     },
 
-    clearChat: async () => {
-        await api.delete('/chat/history');
+    clearChat: async (roomId) => {
+        await api.clearChatHistory(roomId);
         set({ chatMessages: [] });
     },
 }));

@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
-import { requireRole, requireApproval } from '../middleware/rbac.js';
+import { prisma } from '../server';
+import { requireRole, requireApproval } from '../middleware/rbac';
 
 export async function partnerRoutes(app: FastifyInstance) {
     app.addHook('preHandler', (app as any).authenticate);
@@ -47,7 +47,7 @@ export async function partnerRoutes(app: FastifyInstance) {
                 onboarded: totalOnboarded,
                 conversionRate: conversionRate + '%',
             },
-            recentMatches: recentMatches.map(m => ({
+            recentMatches: recentMatches.map((m: any) => ({
                 id: m.id,
                 productName: m.product.name,
                 productType: m.product.type,
@@ -68,10 +68,10 @@ export async function partnerRoutes(app: FastifyInstance) {
             _count: true,
         });
 
-        // Only return groups with ≥ 50 users for k-anonymity
-        const kAnonymized = incomeDistribution
-            .filter(g => g._count >= 10) // relaxed to 10 for hackathon demo
-            .map(g => ({
+        // Only return groups with ≥ 50 users (K-Anonymity)
+        const kAnonymizedIncome = incomeDistribution
+            .filter((g: any) => g._count >= 50)
+            .map((g: any) => ({
                 incomeRange: g.incomeRange || 'Unknown',
                 userCount: g._count,
             }));
@@ -83,6 +83,14 @@ export async function partnerRoutes(app: FastifyInstance) {
             _count: true,
         });
 
+        // K-Anonymity for Risk Profile (K>=50)
+        const kAnonymizedRisk = riskDistribution
+            .filter((r: any) => r._count >= 50)
+            .map((r: any) => ({
+                riskProfile: r.riskProfile || 'Unknown',
+                userCount: r._count,
+            }));
+
         // Product uptake funnel for this partner
         const partnerId = request.user.userId;
         const funnel = await Promise.all([
@@ -92,16 +100,18 @@ export async function partnerRoutes(app: FastifyInstance) {
         ]);
 
         return reply.send({
-            incomeDistribution: kAnonymized,
-            riskDistribution: riskDistribution.map(r => ({
-                riskProfile: r.riskProfile || 'Unknown',
-                userCount: r._count,
-            })),
+            incomeDistribution: kAnonymizedIncome,
+            riskDistribution: kAnonymizedRisk,
             uptakeFunnel: {
                 matched: funnel[0],
                 applied: funnel[1],
                 onboarded: funnel[2],
             },
+            privacy: {
+                standard: 'K-Anonymity',
+                kValue: 50,
+                message: 'Data is aggregated and groups with fewer than 50 users are hidden to protect individual privacy.'
+            }
         });
     });
 
@@ -120,7 +130,7 @@ export async function partnerRoutes(app: FastifyInstance) {
         });
 
         return reply.send({
-            products: products.map(p => ({
+            products: products.map((p: any) => ({
                 id: p.id,
                 name: p.name,
                 description: p.description,
@@ -208,7 +218,7 @@ export async function partnerRoutes(app: FastifyInstance) {
 
     // List eligible products for the current user
     app.get('/marketplace/products', {
-        preHandler: [requireRole('END_USER')],
+        preHandler: [requireRole('END_USER', 'PARTNER', 'ADMIN')],
     }, async (request: any, reply) => {
         const userId = request.user.userId;
 
@@ -230,10 +240,10 @@ export async function partnerRoutes(app: FastifyInstance) {
         const userMatches = await prisma.partnerMatch.findMany({
             where: { userId }
         });
-        const appliedProductIds = new Set(userMatches.map(m => m.productId));
+        const appliedProductIds = new Set(userMatches.map((m: any) => m.productId));
 
         // Basic matching logic (can be expanded)
-        const matchedProducts = products.map(p => {
+        const matchedProducts = products.map((p: any) => {
             let isEligible = true;
             let matchReason = 'General offering';
 
@@ -260,7 +270,7 @@ export async function partnerRoutes(app: FastifyInstance) {
                 interestRate: p.interestRate,
                 minAmount: p.minAmount,
                 maxAmount: p.maxAmount,
-                partnerName: p.partner.name,
+                partnerName: p.partner?.name || 'Partner',
                 isEligible,
                 matchReason,
                 hasApplied: appliedProductIds.has(p.id)

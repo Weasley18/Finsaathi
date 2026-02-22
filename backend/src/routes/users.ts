@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
+import { prisma } from '../server';
 import { z } from 'zod';
-import { requireRole, requireOwnerOrRole, hasHigherOrEqualRole } from '../middleware/rbac.js';
+import { requireRole, requireOwnerOrRole, hasHigherOrEqualRole } from '../middleware/rbac';
 
 const updateUserSchema = z.object({
     name: z.string().optional(),
@@ -53,7 +53,16 @@ export async function userRoutes(app: FastifyInstance) {
             data,
         });
 
-        return reply.send({ success: true, user });
+        // Re-issue JWT if language changed (so chat route picks up new language)
+        let token: string | undefined;
+        if (data.language) {
+            token = app.jwt.sign(
+                { userId: user.id, phone: user.phone, role: user.role, approvalStatus: user.approvalStatus, language: user.language || 'en' },
+                { expiresIn: '30d' }
+            );
+        }
+
+        return reply.send({ success: true, user, ...(token && { token }) });
     });
 
     // ─── Get Dashboard Summary (own data) ────────────────────────
@@ -101,11 +110,11 @@ export async function userRoutes(app: FastifyInstance) {
                 totalExpenses: monthlyExpenses._sum.amount || 0,
                 totalIncome: monthlyIncome._sum.amount || 0,
                 savings: (monthlyIncome._sum.amount || 0) - (monthlyExpenses._sum.amount || 0),
-                healthScore: profile?.healthScore || 50,
+                healthScore: profile?.healthScore ?? null,
             },
             goals,
             recentTransactions,
-            categorySpending: categorySpending.map(c => ({
+            categorySpending: categorySpending.map((c: any) => ({
                 category: c.category,
                 amount: c._sum.amount || 0,
             })),
@@ -122,7 +131,10 @@ export async function userRoutes(app: FastifyInstance) {
     }, async (request: any, reply) => {
         const { role, search, page = '1', limit = '50' } = request.query as any;
 
-        const where: any = {};
+        const where: any = {
+            name: { not: null, notIn: [''] },  // Exclude users with no name
+            isActive: true,                     // Only properly signed-up active users
+        };
         if (role) where.role = role;
         if (search) {
             where.OR = [

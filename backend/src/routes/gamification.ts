@@ -1,22 +1,31 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
+import { prisma } from '../server';
 import { z } from 'zod';
 
 const BADGE_RULES = [
     { name: 'First Step', description: 'Logged your first expense', requiredPoints: 10, icon: '🌟' },
     { name: 'Consistent Saver', description: 'Reached a 3-day streak', requiredPoints: 30, icon: '🔥' },
-    { name: 'Financial Ninja', description: 'Earned 100 points', requiredPoints: 100, icon: '🥷' }
+    { name: 'Financial Ninja', description: 'Earned 100 points', requiredPoints: 100, icon: '🥷' },
+    { name: 'Quiz Master', description: 'Answered 10 quiz questions correctly', requiredPoints: 150, icon: '🧠' },
+    { name: 'Bookworm', description: 'Completed 5 lessons', requiredPoints: 200, icon: '📚' },
+    { name: 'Budget Pro', description: 'Stayed within budget for a month', requiredPoints: 250, icon: '💰' },
+    { name: 'Goal Crusher', description: 'Completed a savings goal', requiredPoints: 300, icon: '🏆' },
 ];
 
 const PointsSchema = z.object({
-    action: z.enum(['LOG_EXPENSE', 'CREATE_GOAL', 'READ_LESSON', 'DAILY_LOGIN']),
+    action: z.enum(['LOG_EXPENSE', 'CREATE_GOAL', 'READ_LESSON', 'DAILY_LOGIN', 'COMPLETE_QUIZ', 'COMPLETE_LESSON', 'EARN_CERTIFICATE', 'SET_BUDGET', 'IMPORT_SMS']),
 });
 
 const ACTION_POINTS: Record<string, number> = {
     'LOG_EXPENSE': 10,
     'CREATE_GOAL': 20,
     'READ_LESSON': 15,
-    'DAILY_LOGIN': 5
+    'DAILY_LOGIN': 5,
+    'COMPLETE_QUIZ': 10,
+    'COMPLETE_LESSON': 20,
+    'EARN_CERTIFICATE': 50,
+    'SET_BUDGET': 15,
+    'IMPORT_SMS': 5,
 };
 
 export async function gamificationRoutes(app: FastifyInstance) {

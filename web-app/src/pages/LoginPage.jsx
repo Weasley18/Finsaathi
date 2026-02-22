@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, setAuthToken } from '../api';
 import { Sparkles, ArrowRight, Phone, Shield } from 'lucide-react';
 
 export default function LoginPage() {
+    const { t } = useTranslation();
     const [step, setStep] = useState('phone');
     const [phone, setPhone] = useState('');
     const [otp, setOtp] = useState('');
@@ -58,15 +60,15 @@ export default function LoginPage() {
             <div style={styles.card}>
                 <div style={styles.logo}>
                     <div style={styles.logoIcon}><Sparkles size={28} color="#000" /></div>
-                    <h1 style={styles.title}>FinSaathi</h1>
-                    <p style={styles.subtitle}>Your Money. Your Future. Simplified.</p>
+                    <h1 style={styles.title}>{t('common.appName')}</h1>
+                    <p style={styles.subtitle}>{t('auth.tagline')}</p>
                 </div>
 
                 {step === 'phone' ? (
                     <form onSubmit={handleSendOtp}>
                         <div style={styles.formHeader}>
                             <Phone size={18} color="var(--accent)" />
-                            <span style={styles.formTitle}>Enter Mobile Number</span>
+                            <span style={styles.formTitle}>{t('auth.enterPhone')}</span>
                         </div>
                         <div style={styles.phoneRow}>
                             <span style={styles.countryCode}>+91</span>
@@ -88,17 +90,17 @@ export default function LoginPage() {
                             disabled={phone.length < 10 || loading}
                             style={{ width: '100%', justifyContent: 'center', marginTop: 16, padding: '14px 20px' }}
                         >
-                            {loading ? 'Sending...' : 'Send OTP'} <ArrowRight size={16} />
+                            {loading ? t('auth.sending') : t('auth.sendOtp')} <ArrowRight size={16} />
                         </button>
                     </form>
                 ) : (
                     <form onSubmit={handleVerify}>
                         <div style={styles.formHeader}>
                             <Shield size={18} color="var(--accent)" />
-                            <span style={styles.formTitle}>Verify OTP</span>
+                            <span style={styles.formTitle}>{t('auth.verifyOtp')}</span>
                         </div>
                         <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 16 }}>
-                            Enter the 6-digit code sent to +91 {phone}
+                            {t('auth.enterOtp', { phone })}
                         </p>
                         <input
                             className="input"
@@ -117,20 +119,20 @@ export default function LoginPage() {
                             disabled={otp.length !== 6 || loading}
                             style={{ width: '100%', justifyContent: 'center', marginTop: 16, padding: '14px 20px' }}
                         >
-                            {loading ? 'Verifying...' : 'Verify & Login'}
+                            {loading ? t('auth.verifying') : t('auth.verifyLogin')}
                         </button>
                         <button
                             type="button"
                             onClick={() => { setStep('phone'); setOtp(''); setError(''); }}
                             style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', marginTop: 12, fontSize: 14, display: 'block', margin: '12px auto 0' }}
                         >
-                            ← Change number
+                            {t('auth.changeNumber')}
                         </button>
                     </form>
                 )}
 
                 <p style={styles.footer}>
-                    🔒 256-bit encrypted • Your data is safe
+                    {t('auth.encrypted')}
                 </p>
             </div>
         </div>

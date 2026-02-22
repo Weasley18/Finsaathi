@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../api';
 import { Target, Plus, TrendingUp, Sparkles, Flame, Trash2, ArrowUpRight, X } from 'lucide-react';
 
 export default function GoalsPage() {
+    const { t } = useTranslation();
     const [goals, setGoals] = useState([]);
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -80,35 +82,35 @@ export default function GoalsPage() {
         <div>
             <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <h2>Savings Goals</h2>
-                    <p>Track your financial milestones</p>
+                    <h2>{t('goals.title')}</h2>
+                    <p>{t('goals.subtitle')}</p>
                 </div>
                 <button className="btn btn-primary" onClick={() => setShowAdd(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Plus size={16} /> Add Goal
+                    <Plus size={16} /> {t('goals.addGoal')}
                 </button>
             </header>
 
             {/* Summary */}
             <div className="stats-grid" style={{ marginBottom: 24 }}>
                 <div className="glass-card stat-card">
-                    <div className="label">Total Saved</div>
+                    <div className="label">{t('goals.totalSaved')}</div>
                     <div className="value" style={{ color: 'var(--accent)' }}>₹{totalSaved.toLocaleString('en-IN')}</div>
-                    <div className="trend"><Sparkles size={14} /> Across all goals</div>
+                    <div className="trend"><Sparkles size={14} /> {t('goals.acrossGoals')}</div>
                 </div>
                 <div className="glass-card stat-card">
-                    <div className="label">Total Target</div>
+                    <div className="label">{t('goals.totalTarget')}</div>
                     <div className="value">₹{totalTarget.toLocaleString('en-IN')}</div>
-                    <div className="trend"><Target size={14} /> Combined</div>
+                    <div className="trend"><Target size={14} /> {t('goals.combined')}</div>
                 </div>
                 <div className="glass-card stat-card">
-                    <div className="label">Active Goals</div>
+                    <div className="label">{t('goals.activeGoals')}</div>
                     <div className="value" style={{ color: 'var(--bright-gold)' }}>{summary?.activeGoals || goals.filter(g => g.status === 'ACTIVE').length}</div>
-                    <div className="trend"><TrendingUp size={14} /> In progress</div>
+                    <div className="trend"><TrendingUp size={14} /> {t('goals.inProgress')}</div>
                 </div>
                 <div className="glass-card stat-card">
-                    <div className="label">Overall Progress</div>
+                    <div className="label">{t('goals.overallProgress')}</div>
                     <div className="value" style={{ color: 'var(--success)' }}>{totalTarget > 0 ? ((totalSaved / totalTarget) * 100).toFixed(0) : 0}%</div>
-                    <div className="trend"><ArrowUpRight size={14} /> Complete</div>
+                    <div className="trend"><ArrowUpRight size={14} /> {t('goals.complete')}</div>
                 </div>
             </div>
 
@@ -116,9 +118,9 @@ export default function GoalsPage() {
             {goals.length === 0 ? (
                 <div className="glass-card" style={{ padding: 60, textAlign: 'center' }}>
                     <Target size={48} color="var(--text-muted)" style={{ marginBottom: 16 }} />
-                    <h3 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>No goals yet</h3>
-                    <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>Set your first savings goal and start building your wealth!</p>
-                    <button className="btn btn-primary" onClick={() => setShowAdd(true)}>Create Your First Goal</button>
+                    <h3 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>{t('goals.noGoals')}</h3>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>{t('goals.noGoalsDesc')}</p>
+                    <button className="btn btn-primary" onClick={() => setShowAdd(true)}>{t('goals.createFirst')}</button>
                 </div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
@@ -141,12 +143,12 @@ export default function GoalsPage() {
                                         <div>
                                             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{goal.name}</div>
                                             <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1 }}>
-                                                TARGET: ₹{goal.targetAmount?.toLocaleString('en-IN')}
+                                                {t('goals.target')}: ₹{goal.targetAmount?.toLocaleString('en-IN')}
                                             </div>
                                         </div>
                                     </div>
                                     <div style={{ display: 'flex', gap: 6 }}>
-                                        {isCompleted && <span className="badge badge-gold">✓ Done</span>}
+                                        {isCompleted && <span className="badge badge-gold">{t('goals.done')}</span>}
                                         {progress >= 75 && !isCompleted && <Flame size={16} color="var(--warning)" />}
                                     </div>
                                 </div>
@@ -172,11 +174,11 @@ export default function GoalsPage() {
                                 </div>
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, fontSize: 13 }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>{progress.toFixed(0)}% complete</span>
+                                    <span style={{ color: 'var(--text-secondary)' }}>{t('goals.percentComplete', { percent: progress.toFixed(0) })}</span>
                                     {goal.status === 'PAUSED' ? (
-                                        <span style={{ color: 'var(--warning)', fontWeight: 600 }}>ON HOLD</span>
+                                        <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{t('goals.onHold')}</span>
                                     ) : goal.daysUntilTarget > 0 ? (
-                                        <span style={{ color: 'var(--text-muted)' }}>{goal.daysUntilTarget} days left</span>
+                                        <span style={{ color: 'var(--text-muted)' }}>{t('goals.daysLeft', { days: goal.daysUntilTarget })}</span>
                                     ) : null}
                                 </div>
 
@@ -187,7 +189,7 @@ export default function GoalsPage() {
                                             onClick={() => { setShowContribute(goal); setContributeAmount(''); }}
                                             style={{ flex: 1, padding: '10px 16px', fontSize: 13 }}
                                         >
-                                            <Plus size={14} style={{ marginRight: 4 }} /> Add Savings
+                                            <Plus size={14} style={{ marginRight: 4 }} /> {t('goals.addSavings')}
                                         </button>
                                     )}
                                     {goal.status === 'PAUSED' ? (
@@ -199,7 +201,7 @@ export default function GoalsPage() {
                                             }}
                                             style={{ flex: 1, padding: '10px 16px', fontSize: 13 }}
                                         >
-                                            Resume Goal
+                                            {t('goals.resumeGoal')}
                                         </button>
                                     ) : (
                                         <button
@@ -208,7 +210,7 @@ export default function GoalsPage() {
                                             style={{ padding: '10px 14px', fontSize: 13, color: 'var(--warning)', borderColor: 'rgba(255,152,0,0.3)' }}
                                             title="Put on hold"
                                         >
-                                            Pause
+                                            {t('goals.pause')}
                                         </button>
                                     )}
                                 </div>
@@ -226,34 +228,34 @@ export default function GoalsPage() {
                 }} onClick={() => setShowAdd(false)}>
                     <div className="glass-card" style={{ padding: 32, width: 440, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                            <h3 style={{ margin: 0 }}>🎯 New Savings Goal</h3>
+                            <h3 style={{ margin: 0 }}>{t('goals.newGoal')}</h3>
                             <button onClick={() => setShowAdd(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                                 <X size={20} />
                             </button>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div>
-                                <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>GOAL NAME</label>
-                                <input className="input" placeholder="e.g., Emergency Fund, Dream Home" value={newGoal.name}
+                                <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>{t('goals.goalName')}</label>
+                                <input className="input" placeholder={t('goals.goalNamePlaceholder')} value={newGoal.name}
                                     onChange={e => setNewGoal({ ...newGoal, name: e.target.value })}
                                     style={{ width: '100%', boxSizing: 'border-box' }} />
                             </div>
                             <div>
-                                <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>TARGET AMOUNT (₹)</label>
+                                <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>{t('goals.targetAmount')}</label>
                                 <input className="input" type="number" placeholder="100000" value={newGoal.targetAmount}
                                     onChange={e => setNewGoal({ ...newGoal, targetAmount: e.target.value })}
                                     style={{ width: '100%', boxSizing: 'border-box' }} />
                             </div>
                             <div>
-                                <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>TARGET DATE (OPTIONAL)</label>
+                                <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>{t('goals.targetDate')}</label>
                                 <input className="input" type="date" value={newGoal.targetDate}
                                     onChange={e => setNewGoal({ ...newGoal, targetDate: e.target.value })}
                                     style={{ width: '100%', boxSizing: 'border-box' }} />
                             </div>
                             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-                                <button className="btn btn-outline" onClick={() => setShowAdd(false)}>Cancel</button>
+                                <button className="btn btn-outline" onClick={() => setShowAdd(false)}>{t('common.cancel')}</button>
                                 <button className="btn btn-primary" onClick={handleAdd} disabled={saving || !newGoal.name || !newGoal.targetAmount}>
-                                    {saving ? 'Creating...' : 'Create Goal'}
+                                    {saving ? t('common.creating') : t('goals.createGoal')}
                                 </button>
                             </div>
                         </div>
@@ -269,23 +271,23 @@ export default function GoalsPage() {
                 }} onClick={() => setShowContribute(null)}>
                     <div className="glass-card" style={{ padding: 32, width: 400, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                            <h3 style={{ margin: 0 }}>💰 Add to "{showContribute.name}"</h3>
+                            <h3 style={{ margin: 0 }}>{t('goals.addToGoal', { name: showContribute.name })}</h3>
                             <button onClick={() => setShowContribute(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                                 <X size={20} />
                             </button>
                         </div>
                         <div>
-                            <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>AMOUNT (₹)</label>
+                            <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>{t('goals.amountLabel')}</label>
                             <input className="input" type="number" placeholder="1000" value={contributeAmount}
                                 onChange={e => setContributeAmount(e.target.value)}
                                 style={{ width: '100%', boxSizing: 'border-box', marginBottom: 12 }} autoFocus />
                             <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
-                                Remaining: ₹{((showContribute.targetAmount || 0) - (showContribute.currentAmount || 0)).toLocaleString('en-IN')}
+                                {t('goals.remaining')} ₹{((showContribute.targetAmount || 0) - (showContribute.currentAmount || 0)).toLocaleString('en-IN')}
                             </p>
                             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                                <button className="btn btn-outline" onClick={() => setShowContribute(null)}>Cancel</button>
+                                <button className="btn btn-outline" onClick={() => setShowContribute(null)}>{t('common.cancel')}</button>
                                 <button className="btn btn-primary" onClick={handleContribute} disabled={saving || !contributeAmount}>
-                                    {saving ? 'Adding...' : 'Add Savings'}
+                                    {saving ? t('common.saving') : t('goals.addSavings')}
                                 </button>
                             </div>
                         </div>

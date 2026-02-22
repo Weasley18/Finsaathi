@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Dimensions, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Dimensions, Alert, ScrollView, KeyboardAvoidingView, Platform, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, Check, ShoppingBag, Car, Lightbulb, Heart, BookOpen, Film, CreditCard, Coffee } from 'lucide-react-native';
+import { X, Check, ShoppingBag, Car, Lightbulb, Heart, BookOpen, Film, CreditCard, Coffee, Mic, MessageSquareText } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import useFinanceStore from '../store/financeStore';
 import { colors, gradients, glassmorphism } from '../theme';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -21,11 +22,81 @@ const CATEGORIES = [
 ];
 
 export default function ExpenseEntry({ navigation }) {
+  const { t } = useTranslation();
   const [amount, setAmount] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Voice/AI state
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [voiceText, setVoiceText] = useState('');
+  const [parsingVoice, setParsingVoice] = useState(false);
+
+  // SMS Parsing state
+  const [showSmsModal, setShowSmsModal] = useState(false);
+  const [smsText, setSmsText] = useState('');
+  const [parsingSms, setParsingSms] = useState(false);
+
   const { addTransaction } = useFinanceStore();
+
+  const handleVoiceSubmit = async () => {
+    if (!voiceText.trim()) return;
+    setParsingVoice(true);
+    try {
+      const api = require('../services/api').default; // lazy load to avoid fast refresh issues with globals if any
+      const res = await api.post('/transactions/parse-text', { text: voiceText });
+      if (res.data && res.data.parsedData) {
+        const { amount: aiAmount, category: aiCat, description: aiDesc } = res.data.parsedData;
+        if (aiAmount) setAmount(aiAmount.toString());
+        if (aiDesc) setDescription(aiDesc);
+
+        // Find matching category in our list
+        const matchedCat = CATEGORIES.find(c => c.name.toLowerCase() === (aiCat || '').toLowerCase());
+        if (matchedCat) setSelectedCategory(matchedCat.name);
+        else setSelectedCategory(CATEGORIES[0].name);
+
+        setShowVoiceModal(false);
+        setVoiceText('');
+      } else {
+        Alert.alert('Try Again', "Couldn't understand the transaction.");
+      }
+    } catch (e) {
+      console.log(e);
+      Alert.alert('Error', 'Failed to parse voice input.');
+    } finally {
+      setParsingVoice(false);
+    }
+  };
+
+  const handleSmsSubmit = async () => {
+    if (!smsText.trim()) return;
+    setParsingSms(true);
+    try {
+      const api = require('../services/api').default;
+      const res = await api.post('/transactions/parse-sms', { text: smsText });
+
+      if (res.data && res.data.success && res.data.parsedData) {
+        const { amount: aiAmount, category: aiCat, description: aiDesc } = res.data.parsedData;
+
+        if (aiAmount) setAmount(aiAmount.toString());
+        if (aiDesc) setDescription(aiDesc);
+
+        const matchedCat = CATEGORIES.find(c => c.name.toLowerCase() === (aiCat || '').toLowerCase());
+        if (matchedCat) setSelectedCategory(matchedCat.name);
+        else setSelectedCategory(CATEGORIES[0].name);
+
+        setShowSmsModal(false);
+        setSmsText('');
+        Alert.alert('Success ✅', 'Transaction details extracted from SMS!');
+      }
+    } catch (e) {
+      console.log(e);
+      Alert.alert('Error', "Couldn't extract details from this SMS format.");
+    } finally {
+      setParsingSms(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!amount || !selectedCategory) {
@@ -73,14 +144,21 @@ export default function ExpenseEntry({ navigation }) {
           <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
             <X size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Expense</Text>
-          <View style={{ width: 40 }} />
+          <Text style={styles.headerTitle}>{t('expenses.addExpense')}</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => setShowSmsModal(true)} style={[styles.micBtn, { marginRight: 8 }]}>
+              <MessageSquareText size={20} color={colors.brightGold} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowVoiceModal(true)} style={styles.micBtn}>
+              <Mic size={20} color={colors.brightGold} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Amount Input */}
           <View style={styles.amountSection}>
-            <Text style={styles.amountLabel}>AMOUNT</Text>
+            <Text style={styles.amountLabel}>{t('expenses.amount')}</Text>
             <View style={styles.amountRow}>
               <Text style={styles.rupeeSymbol}>₹</Text>
               <TextInput
@@ -96,7 +174,7 @@ export default function ExpenseEntry({ navigation }) {
           </View>
 
           {/* Category Selection */}
-          <Text style={styles.sectionLabel}>CATEGORY</Text>
+          <Text style={styles.sectionLabel}>{t('expenses.category').toUpperCase()}</Text>
           <View style={styles.categoryGrid}>
             {CATEGORIES.map((cat) => {
               const IconComponent = cat.icon;
@@ -119,7 +197,7 @@ export default function ExpenseEntry({ navigation }) {
                     <IconComponent size={22} color={isSelected ? '#fff' : cat.color} />
                   </View>
                   <Text style={[styles.categoryName, isSelected && styles.categoryNameSelected]}>
-                    {cat.name}
+                    {t('expenses.categories.' + cat.name.toLowerCase())}
                   </Text>
                   {isSelected && (
                     <View style={styles.selectedBadge}>
@@ -132,7 +210,7 @@ export default function ExpenseEntry({ navigation }) {
           </View>
 
           {/* Description */}
-          <Text style={styles.sectionLabel}>NOTE (OPTIONAL)</Text>
+          <Text style={styles.sectionLabel}>{t('expenses.noteOptional')}</Text>
           <View style={styles.descriptionContainer}>
             <TextInput
               style={styles.descriptionInput}
@@ -158,12 +236,90 @@ export default function ExpenseEntry({ navigation }) {
               style={styles.saveBtnGradient}
             >
               <Text style={styles.saveBtnText}>
-                {saving ? 'Saving...' : amount ? `Save ₹${parseFloat(amount).toLocaleString('en-IN')} Expense` : 'Save Expense'}
+                {saving ? t('common.loading') : amount ? `${t('common.save')} ₹${parseFloat(amount).toLocaleString('en-IN')} ${t('expenses.category')}` : t('expenses.saveExpense')}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Voice Assistant Modal */}
+      <Modal visible={showVoiceModal} animationType="slide" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalBg}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>AI Voice Assistant 🎙️</Text>
+              <TouchableOpacity onPress={() => setShowVoiceModal(false)}>
+                <X size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>How much did you spend and on what?</Text>
+
+            <TextInput
+              style={styles.voiceInput}
+              placeholder='e.g., "I spent 450 on an Uber to the office"'
+              placeholderTextColor={colors.textMuted}
+              value={voiceText}
+              onChangeText={setVoiceText}
+              multiline
+              autoFocus
+            />
+
+            <TouchableOpacity
+              style={[styles.parseBtn, (!voiceText || parsingVoice) && styles.parseBtnDisabled]}
+              onPress={handleVoiceSubmit}
+              disabled={!voiceText || parsingVoice}
+            >
+              <LinearGradient colors={gradients.primary} style={styles.parseBtnGradient}>
+                {parsingVoice ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.parseBtnText}>Auto-Fill Form ✨</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* SMS Parser Modal */}
+      <Modal visible={showSmsModal} animationType="slide" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalBg}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Paste Bank SMS 💬</Text>
+              <TouchableOpacity onPress={() => setShowSmsModal(false)}>
+                <X size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>Paste your bank SMS here to auto-fill the form instantly.</Text>
+
+            <TextInput
+              style={styles.voiceInput}
+              placeholder='e.g., "Rs.500.00 debited from A/c XX1234 on 21-Feb-26 at Swiggy"'
+              placeholderTextColor={colors.textMuted}
+              value={smsText}
+              onChangeText={setSmsText}
+              multiline
+              autoFocus
+            />
+
+            <TouchableOpacity
+              style={[styles.parseBtn, (!smsText || parsingSms) && styles.parseBtnDisabled]}
+              onPress={handleSmsSubmit}
+              disabled={!smsText || parsingSms}
+            >
+              <LinearGradient colors={gradients.primary} style={styles.parseBtnGradient}>
+                {parsingSms ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.parseBtnText}>Extract Details ✨</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -178,6 +334,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.divider,
   },
   closeBtn: { padding: 8 },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
+  micBtn: {
+    padding: 8,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)'
+  },
   headerTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
   scrollContent: { padding: 24 },
   // Amount
@@ -250,4 +414,31 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 17, fontWeight: '700', color: '#000',
   },
+  // Modal
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalContent: {
+    backgroundColor: colors.surfaceHover,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24,
+    minHeight: 300,
+  },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: colors.textPrimary },
+  modalSubtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: 24 },
+  voiceInput: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 12,
+    padding: 16,
+    color: colors.textPrimary,
+    fontSize: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.divider
+  },
+  parseBtn: { borderRadius: 12, overflow: 'hidden' },
+  parseBtnDisabled: { opacity: 0.5 },
+  parseBtnGradient: { paddingVertical: 16, alignItems: 'center' },
+  parseBtnText: { fontSize: 16, fontWeight: 'bold', color: '#fff' }
 });

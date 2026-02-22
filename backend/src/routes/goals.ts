@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server.js';
+import { prisma } from '../server';
 import { z } from 'zod';
 
 const goalSchema = z.object({
@@ -40,8 +40,8 @@ export async function goalRoutes(app: FastifyInstance) {
 
     // ─── List Goals ──────────────────────────────────────────────
     app.get('/', async (request: any, reply) => {
-        const userId = request.user.userId;
-        const status = (request.query as any).status;
+        const { status, clientId } = request.query as any;
+        const userId = (request.user.role === 'ADVISOR' && clientId) ? clientId : request.user.userId;
 
         const goals = await prisma.goal.findMany({
             where: {

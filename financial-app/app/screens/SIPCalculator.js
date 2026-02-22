@@ -8,6 +8,7 @@ import {
     ChevronLeft, Sparkles, ArrowRight, Info
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -40,6 +41,7 @@ const PRESET_AMOUNTS = [500, 1000, 2000, 5000, 10000, 25000];
 const PRESET_YEARS = [1, 3, 5, 10, 15, 20, 25];
 
 export default function SIPCalculator({ navigation }) {
+    const { t } = useTranslation();
     const [mode, setMode] = useState('SIP'); // SIP | LUMPSUM
     const [amount, setAmount] = useState('5000');
     const [years, setYears] = useState(10);
@@ -68,7 +70,7 @@ export default function SIPCalculator({ navigation }) {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <ChevronLeft size={24} color="#F5F0EB" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>SIP Calculator</Text>
+                <Text style={styles.headerTitle}>{t('sip.title')}</Text>
                 <View style={{ width: 40 }} />
             </View>
 
@@ -92,7 +94,7 @@ export default function SIPCalculator({ navigation }) {
                 {/* Amount Input */}
                 <View style={styles.card}>
                     <Text style={styles.cardLabel}>
-                        {mode === 'SIP' ? 'Monthly Investment' : 'One-time Investment'}
+                        {mode === 'SIP' ? t('sip.monthlyInvestment') : 'One-time Investment'}
                     </Text>
                     <View style={styles.amountRow}>
                         <Text style={styles.rupeeSign}>₹</Text>
@@ -122,7 +124,7 @@ export default function SIPCalculator({ navigation }) {
 
                 {/* Duration */}
                 <View style={styles.card}>
-                    <Text style={styles.cardLabel}>Time Period</Text>
+                    <Text style={styles.cardLabel}>{t('sip.timePeriod')}</Text>
                     <Text style={styles.durationValue}>{years} {years === 1 ? 'Year' : 'Years'}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.presetRow}>
                         {PRESET_YEARS.map(y => (
@@ -141,7 +143,7 @@ export default function SIPCalculator({ navigation }) {
 
                 {/* Expected Return Rate */}
                 <View style={styles.card}>
-                    <Text style={styles.cardLabel}>Expected Annual Return</Text>
+                    <Text style={styles.cardLabel}>{t('sip.expectedReturn')}</Text>
                     <Text style={styles.durationValue}>{returnRate}% p.a.</Text>
                     <View style={styles.returnPresets}>
                         {[8, 10, 12, 15, 18].map(r => (
@@ -167,7 +169,7 @@ export default function SIPCalculator({ navigation }) {
                         >
                             <Sparkles size={20} color="#D4AF37" />
                             <Text style={styles.resultsTitle}>
-                                {mode === 'SIP' ? 'Your SIP Will Grow To' : 'Your Investment Will Grow To'}
+                                {mode === 'SIP' ? t('sip.futureValue') : 'Your Investment Will Grow To'}
                             </Text>
 
                             <Text style={styles.futureValue}>{formatCurrency(result.futureValue)}</Text>
@@ -175,12 +177,12 @@ export default function SIPCalculator({ navigation }) {
                             <View style={styles.resultRow}>
                                 <View style={styles.resultItem}>
                                     <Text style={styles.resultLabel}>
-                                        {mode === 'SIP' ? 'Total Invested' : 'Principal'}
+                                        {mode === 'SIP' ? t('sip.totalInvested') : 'Principal'}
                                     </Text>
                                     <Text style={styles.resultAmount}>{formatCurrency(result.invested)}</Text>
                                 </View>
                                 <View style={[styles.resultItem, { borderLeftWidth: 1, borderLeftColor: 'rgba(186,143,13,0.2)', paddingLeft: 20 }]}>
-                                    <Text style={styles.resultLabel}>Wealth Gained ✨</Text>
+                                    <Text style={styles.resultLabel}>{t('sip.wealthGained')} ✨</Text>
                                     <Text style={[styles.resultAmount, { color: '#4CAF50' }]}>{formatCurrency(result.gains)}</Text>
                                 </View>
                             </View>
@@ -201,7 +203,7 @@ export default function SIPCalculator({ navigation }) {
                 {/* Recommended Funds */}
                 <View style={styles.sectionHeader}>
                     <TrendingUp size={18} color="#D4AF37" />
-                    <Text style={styles.sectionTitle}>Recommended Funds</Text>
+                    <Text style={styles.sectionTitle}>{t('sip.recommendedFunds')}</Text>
                 </View>
 
                 {RECOMMENDED_FUNDS.map((fund, idx) => (

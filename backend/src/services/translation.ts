@@ -1,11 +1,42 @@
-import { chatWithOllama } from './ollama.js';
+import { createHash } from 'crypto';
+import { chatWithOllama } from './ollama';
 
 // ─── Multilingual Translation Service ────────────────────────────
-// Uses Ollama LLM to translate between Indian languages and English.
-// For hackathon: Uses LLM-based translation. In production, swap
-// with IndicTrans2 or Google Translate API for better accuracy.
+// Uses Helsinki-NLP opus-mt multilingual models via HuggingFace Inference API.
+// Falls back to Ollama LLM translation if HF is unavailable.
 
-const SUPPORTED_LANGUAGES: Record<string, string> = {
+const HF_API_KEY = process.env.HUGGINGFACE_API_KEY || '';
+const HF_MUL_TO_EN = 'https://router.huggingface.co/hf-inference/models/Helsinki-NLP/opus-mt-mul-en';
+const HF_EN_TO_MUL = 'https://router.huggingface.co/hf-inference/models/Helsinki-NLP/opus-mt-en-mul';
+
+// ─── Redis-based Translation Cache ──────────────────────────────
+import Redis from 'ioredis';
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const CACHE_TTL = 86400; // 24 hours
+
+async function getCachedTranslation(key: string): Promise<string | null> {
+    try {
+        return await redis.get(key);
+    } catch {
+        return null;
+    }
+}
+
+async function setCachedTranslation(key: string, value: string): Promise<void> {
+    try {
+        await redis.set(key, value, 'EX', CACHE_TTL);
+    } catch (err) {
+        console.error('[Translation Cache] Failed to set:', err);
+    }
+}
+
+function translationCacheKey(sourceLang: string, targetLang: string, text: string): string {
+    const hash = createHash('sha256').update(text).digest('hex').substring(0, 16);
+    return `trans:${sourceLang}:${targetLang}:${hash}`;
+}
+
+// ─── Supported Languages ────────────────────────────────────────
+export const SUPPORTED_LANGUAGES: Record<string, string> = {
     en: 'English',
     hi: 'Hindi',
     ta: 'Tamil',
@@ -17,60 +48,118 @@ const SUPPORTED_LANGUAGES: Record<string, string> = {
     ml: 'Malayalam',
     pa: 'Punjabi',
     or: 'Odia',
+    as: 'Assamese',
 };
 
-// ─── Language Detection ──────────────────────────────────────────
-// Uses Unicode ranges to detect Indic scripts
-export function detectLanguage(text: string): string {
-    // Devanagari: U+0900-U+097F (Hindi, Marathi)
-    if (/[\u0900-\u097F]/.test(text)) return 'hi';
-    // Tamil: U+0B80-U+0BFF
-    if (/[\u0B80-\u0BFF]/.test(text)) return 'ta';
-    // Telugu: U+0C00-U+0C7F
-    if (/[\u0C00-\u0C7F]/.test(text)) return 'te';
-    // Bengali: U+0980-U+09FF
-    if (/[\u0980-\u09FF]/.test(text)) return 'bn';
-    // Gujarati: U+0A80-U+0AFF
-    if (/[\u0A80-\u0AFF]/.test(text)) return 'gu';
-    // Kannada: U+0C80-U+0CFF
-    if (/[\u0C80-\u0CFF]/.test(text)) return 'kn';
-    // Malayalam: U+0D00-U+0D7F
-    if (/[\u0D00-\u0D7F]/.test(text)) return 'ml';
-    // Gurmukhi (Punjabi): U+0A00-U+0A7F
-    if (/[\u0A00-\u0A7F]/.test(text)) return 'pa';
-    // Odia: U+0B00-U+0B7F
-    if (/[\u0B00-\u0B7F]/.test(text)) return 'or';
+// Helsinki-NLP opus-mt uses ISO 639-3 language codes with >>code<< prefix
+const LANG_CODE_MAP: Record<string, string> = {
+    en: 'eng',
+    hi: 'hin',
+    ta: 'tam',
+    te: 'tel',
+    bn: 'ben',
+    mr: 'mar',
+    gu: 'guj',
+    kn: 'kan',
+    ml: 'mal',
+    pa: 'pan',
+    or: 'ori',
+    as: 'asm',
+};
 
-    // Check for Romanized Hindi (common words)
-    const hindiRomanized = /\b(kya|mera|paisa|kitna|bachat|kharch|kaise|yojana|sip|emi|loan|mujhe|bataao|chahiye|rupaye|paise)\b/i;
-    if (hindiRomanized.test(text)) return 'hi';
+// ─── Helsinki-NLP opus-mt HuggingFace API Call ───────────────────
+async function callOpusMT(
+    text: string,
+    sourceLang: string,
+    targetLang: string,
+): Promise<string> {
+    const srcCode = LANG_CODE_MAP[sourceLang];
+    const tgtCode = LANG_CODE_MAP[targetLang];
 
-    return 'en';
+    if (!srcCode || !tgtCode) {
+        console.warn(`[Translation] Unsupported lang pair: ${sourceLang} → ${targetLang}`);
+        return text;
+    }
+
+    // Determine direction and prepend language tag
+    let apiUrl: string;
+    let input: string;
+
+    if (targetLang === 'en') {
+        // Indic → English: use mul-en model with source language tag
+        apiUrl = HF_MUL_TO_EN;
+        input = `>>${srcCode}<< ${text}`;
+    } else {
+        // English → Indic: use en-mul model with target language tag
+        apiUrl = HF_EN_TO_MUL;
+        input = `>>${tgtCode}<< ${text}`;
+    }
+
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${HF_API_KEY}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ inputs: input }),
+    });
+
+    if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`HF API error ${response.status}: ${errBody}`);
+    }
+
+    const result = await response.json();
+
+    // HuggingFace returns [{ translation_text: "..." }]
+    if (Array.isArray(result) && result.length > 0) {
+        return result[0].translation_text || result[0].generated_text || text;
+    }
+
+    return text;
+}
+
+// ─── Ollama Fallback Translation ─────────────────────────────────
+async function translateWithOllama(text: string, fromLang: string, toLang: string): Promise<string> {
+    const fromName = SUPPORTED_LANGUAGES[fromLang] || fromLang;
+    const toName = SUPPORTED_LANGUAGES[toLang] || toLang;
+    const systemPrompt = 'You are a professional translator. Respond with ONLY the translated text, nothing else. No explanations.';
+    const messages = [{ role: 'user', content: `Translate from ${fromName} to ${toName}:\n\n${text}` }];
+    const result = await chatWithOllama(systemPrompt, messages);
+    return result.trim();
 }
 
 // ─── Translate to English ────────────────────────────────────────
 export async function translateToEnglish(text: string, sourceLang: string): Promise<string> {
     if (sourceLang === 'en') return text;
 
-    const langName = SUPPORTED_LANGUAGES[sourceLang] || 'Hindi';
+    // Check cache
+    const cacheKey = translationCacheKey(sourceLang, 'en', text);
+    const cached = await getCachedTranslation(cacheKey);
+    if (cached) {
+        console.log(`[Translation] Cache hit: ${sourceLang} → en`);
+        return cached;
+    }
 
     try {
-        const systemPrompt = `You are a translator. Translate the following ${langName} text to English. 
-RULES:
-- Output ONLY the English translation, nothing else.
-- Keep financial terms (SIP, EMI, UPI, PPF, NPS, CIBIL) as-is.
-- Keep ₹ amounts as-is.
-- Preserve the intent and emotion of the original message.
-- If the text is already partially in English, translate only the non-English parts.`;
-
-        const response = await chatWithOllama(systemPrompt, [
-            { role: 'user', content: text },
-        ]);
-
-        return response.trim();
+        if (HF_API_KEY) {
+            const translated = await callOpusMT(text, sourceLang, 'en');
+            await setCachedTranslation(cacheKey, translated);
+            console.log(`[Translation] opus-mt: ${sourceLang} → en`);
+            return translated;
+        }
+        throw new Error('No HF API key, falling back to Ollama');
     } catch (error) {
-        console.error('[Translation] Error translating to English:', error);
-        return text; // fallback to original
+        console.warn('[Translation] HF failed, trying Ollama fallback:', (error as Error).message);
+        try {
+            const translated = await translateWithOllama(text, sourceLang, 'en');
+            await setCachedTranslation(cacheKey, translated);
+            console.log(`[Translation] Ollama fallback: ${sourceLang} → en`);
+            return translated;
+        } catch (ollamaErr) {
+            console.error('[Translation] All methods failed:', ollamaErr);
+            return text;
+        }
     }
 }
 
@@ -78,27 +167,44 @@ RULES:
 export async function translateFromEnglish(text: string, targetLang: string): Promise<string> {
     if (targetLang === 'en') return text;
 
-    const langName = SUPPORTED_LANGUAGES[targetLang] || 'Hindi';
+    // Check cache
+    const cacheKey = translationCacheKey('en', targetLang, text);
+    const cached = await getCachedTranslation(cacheKey);
+    if (cached) {
+        console.log(`[Translation] Cache hit: en → ${targetLang}`);
+        return cached;
+    }
 
     try {
-        const systemPrompt = `You are a translator. Translate the following English text to ${langName}.
-RULES:
-- Output ONLY the ${langName} translation, nothing else.
-- Keep financial terms (SIP, EMI, UPI, PPF, NPS, CIBIL) in English.
-- Keep ₹ amounts in digits (₹5000, not पांच हज़ार रुपये).
-- Use simple, conversational ${langName}. Avoid overly formal or Sanskritized vocabulary.
-- Keep emoji as-is.
-- Preserve markdown formatting (bullet points, bold text).`;
-
-        const response = await chatWithOllama(systemPrompt, [
-            { role: 'user', content: text },
-        ]);
-
-        return response.trim();
+        if (HF_API_KEY) {
+            const translated = await callOpusMT(text, 'en', targetLang);
+            await setCachedTranslation(cacheKey, translated);
+            console.log(`[Translation] opus-mt: en → ${targetLang}`);
+            return translated;
+        }
+        throw new Error('No HF API key, falling back to Ollama');
     } catch (error) {
-        console.error('[Translation] Error translating from English:', error);
-        return text; // fallback to original
+        console.warn('[Translation] HF failed, trying Ollama fallback:', (error as Error).message);
+        try {
+            const translated = await translateWithOllama(text, 'en', targetLang);
+            await setCachedTranslation(cacheKey, translated);
+            console.log(`[Translation] Ollama fallback: en → ${targetLang}`);
+            return translated;
+        } catch (ollamaErr) {
+            console.error('[Translation] All methods failed:', ollamaErr);
+            return text;
+        }
     }
+}
+
+// ─── Translate arbitrary text (for middleware use) ───────────────
+export async function translateText(text: string, fromLang: string, toLang: string): Promise<string> {
+    if (fromLang === toLang) return text;
+    if (toLang === 'en') return translateToEnglish(text, fromLang);
+    if (fromLang === 'en') return translateFromEnglish(text, toLang);
+    // For non-English pair, pivot through English
+    const english = await translateToEnglish(text, fromLang);
+    return translateFromEnglish(english, toLang);
 }
 
 // ─── Full Translation Pipeline ───────────────────────────────────
@@ -113,7 +219,7 @@ export interface TranslationContext {
 }
 
 export async function preProcessMessage(message: string, userLanguage?: string): Promise<TranslationContext> {
-    const detectedLang = userLanguage || detectLanguage(message);
+    const detectedLang = userLanguage || 'en';
     const needsTranslation = detectedLang !== 'en';
 
     return {

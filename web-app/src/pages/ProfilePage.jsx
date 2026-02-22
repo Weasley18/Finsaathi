@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, setAuthToken } from '../api';
 import { User, Shield, DollarSign, Globe, TrendingUp, Save, LogOut, Edit3, X, Check, Sparkles } from 'lucide-react';
 
@@ -20,9 +21,19 @@ const LANGUAGES = [
     { code: 'en', label: 'English', flag: '🇬🇧' },
     { code: 'hi', label: 'हिन्दी', flag: '🇮🇳' },
     { code: 'kn', label: 'ಕನ್ನಡ', flag: '🇮🇳' },
+    { code: 'ta', label: 'தமிழ்', flag: '🇮🇳' },
+    { code: 'te', label: 'తెలుగు', flag: '🇮🇳' },
+    { code: 'bn', label: 'বাংলা', flag: '🇮🇳' },
+    { code: 'mr', label: 'मराठी', flag: '🇮🇳' },
+    { code: 'gu', label: 'ગુજરાતી', flag: '🇮🇳' },
+    { code: 'ml', label: 'മലയാളം', flag: '🇮🇳' },
+    { code: 'pa', label: 'ਪੰਜਾਬੀ', flag: '🇮🇳' },
+    { code: 'or', label: 'ଓଡ଼ିଆ', flag: '🇮🇳' },
+    { code: 'as', label: 'অসমীয়া', flag: '🇮🇳' },
 ];
 
 export default function ProfilePage() {
+    const { t, i18n } = useTranslation();
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
@@ -66,6 +77,11 @@ export default function ProfilePage() {
 
             await api.updateProfile(profileData);
 
+            // Switch i18n language if changed
+            if (editLang !== user?.language) {
+                i18n.changeLanguage(editLang);
+            }
+
             // Refresh user data
             const data = await api.getMe();
             const u = data.user || data;
@@ -88,13 +104,13 @@ export default function ProfilePage() {
     const getRiskInfo = (val) => RISK_PROFILES.find(r => r.value === val) || null;
     const getLangLabel = (code) => LANGUAGES.find(l => l.code === code) || LANGUAGES[0];
 
-    if (loading) return <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>Loading profile...</div>;
+    if (loading) return <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>{t('common.loading')}</div>;
 
     return (
         <div>
             <div className="page-header">
-                <h2>My Profile</h2>
-                <p>Manage your account and preferences</p>
+                <h2>{t('profile.title')}</h2>
+                <p>{t('profile.subtitle')}</p>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, maxWidth: 900 }}>
@@ -125,7 +141,7 @@ export default function ProfilePage() {
                         </div>
                         {!editing && (
                             <button className="btn btn-outline" onClick={startEditing} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Edit3 size={14} /> Edit Profile
+                                <Edit3 size={14} /> {t('profile.editProfile')}
                             </button>
                         )}
                     </div>
@@ -134,16 +150,16 @@ export default function ProfilePage() {
                 {/* Account Details */}
                 <div className="glass-card" style={{ padding: 24 }}>
                     <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <User size={18} color="var(--accent)" /> Account Details
+                        <User size={18} color="var(--accent)" /> {t('profile.accountDetails')}
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <InfoRow icon={<User size={16} />} label="Name" value={user?.name || 'Not set'} color="var(--accent)" />
-                        <InfoRow icon={<DollarSign size={16} />} label="Income Range" value={getIncomeLabel(user?.incomeRange)} color="#4caf50" />
-                        <InfoRow icon={<TrendingUp size={16} />} label="Risk Profile"
-                            value={getRiskInfo(user?.riskProfile) ? `${getRiskInfo(user?.riskProfile).emoji} ${getRiskInfo(user?.riskProfile).label}` : 'Not set'}
+                        <InfoRow icon={<User size={16} />} label={t('profile.name')} value={user?.name || t('common.notSet')} color="var(--accent)" />
+                        <InfoRow icon={<DollarSign size={16} />} label={t('profile.incomeRange')} value={getIncomeLabel(user?.incomeRange)} color="#4caf50" />
+                        <InfoRow icon={<TrendingUp size={16} />} label={t('profile.riskProfile')}
+                            value={getRiskInfo(user?.riskProfile) ? `${getRiskInfo(user?.riskProfile).emoji} ${getRiskInfo(user?.riskProfile).label}` : t('common.notSet')}
                             color="#e91e63" />
-                        <InfoRow icon={<Globe size={16} />} label="Language" value={`${getLangLabel(user?.language).flag} ${getLangLabel(user?.language).label}`} color="#3f51b5" />
-                        <InfoRow icon={<Sparkles size={16} />} label="Member Since"
+                        <InfoRow icon={<Globe size={16} />} label={t('profile.language')} value={`${getLangLabel(user?.language).flag} ${getLangLabel(user?.language).label}`} color="#3f51b5" />
+                        <InfoRow icon={<Sparkles size={16} />} label={t('profile.memberSince')}
                             value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}
                             color="#9c27b0" />
                     </div>
@@ -152,7 +168,7 @@ export default function ProfilePage() {
                 {/* Financial Profile */}
                 <div className="glass-card" style={{ padding: 24 }}>
                     <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Shield size={18} color="var(--accent)" /> Financial Profile
+                        <Shield size={18} color="var(--accent)" /> {t('profile.financialProfile')}
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <div style={{
@@ -160,17 +176,17 @@ export default function ProfilePage() {
                             background: 'rgba(186,143,13,0.08)', border: '1px solid rgba(186,143,13,0.2)',
                             textAlign: 'center',
                         }}>
-                            <div style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text-muted)', marginBottom: 8 }}>HEALTH SCORE</div>
+                            <div style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text-muted)', marginBottom: 8 }}>{t('profile.healthScoreLabel')}</div>
                             <div style={{ fontSize: 42, fontWeight: 800, color: 'var(--bright-gold)' }}>
-                                {user?.financialProfile?.healthScore || 50}
+                                {user?.financialProfile?.healthScore ?? '—'}
                             </div>
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>out of 100</div>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('profile.outOf100')}</div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <MiniStat label="Transactions" value={user?._count?.transactions ?? '—'} />
-                            <MiniStat label="Goals" value={user?._count?.goals ?? '—'} />
-                            <MiniStat label="Documents" value={user?._count?.documents ?? '—'} />
-                            <MiniStat label="Status" value={user?.isActive ? '✅ Active' : '❌ Inactive'} />
+                            <MiniStat label={t('profile.transactions')} value={user?._count?.transactions ?? '—'} />
+                            <MiniStat label={t('profile.goals')} value={user?._count?.goals ?? '—'} />
+                            <MiniStat label={t('profile.documents')} value={user?._count?.documents ?? '—'} />
+                            <MiniStat label={t('profile.status')} value={user?.isActive ? t('profile.active') : t('profile.inactive')} />
                         </div>
                     </div>
                 </div>
@@ -179,12 +195,12 @@ export default function ProfilePage() {
                 <div className="glass-card" style={{ padding: 24, gridColumn: '1 / -1' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            <h3 className="section-title" style={{ margin: 0 }}>Session</h3>
-                            <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '4px 0 0' }}>Sign out of your current session</p>
+                            <h3 className="section-title" style={{ margin: 0 }}>{t('profile.session')}</h3>
+                            <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '4px 0 0' }}>{t('profile.sessionDesc')}</p>
                         </div>
                         <button className="btn btn-outline" onClick={handleLogout}
                             style={{ color: 'var(--error)', borderColor: 'rgba(231,76,60,0.3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <LogOut size={14} /> Logout
+                            <LogOut size={14} /> {t('common.logout')}
                         </button>
                     </div>
                 </div>
@@ -199,7 +215,7 @@ export default function ProfilePage() {
                     <div className="glass-card" style={{ padding: 32, width: 520, maxWidth: '90vw', maxHeight: '85vh', overflowY: 'auto' }}
                         onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
-                            <h3 style={{ margin: 0, fontSize: 22 }}>Edit Profile</h3>
+                            <h3 style={{ margin: 0, fontSize: 22 }}>{t('profile.editProfile')}</h3>
                             <button onClick={() => setEditing(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                                 <X size={20} />
                             </button>
@@ -254,7 +270,7 @@ export default function ProfilePage() {
 
                         {/* Language */}
                         <FieldLabel>LANGUAGE</FieldLabel>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 28 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
                             {LANGUAGES.map(lang => (
                                 <button key={lang.code}
                                     onClick={() => setEditLang(lang.code)}
@@ -275,10 +291,10 @@ export default function ProfilePage() {
 
                         {/* Actions */}
                         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                            <button className="btn btn-outline" onClick={() => setEditing(false)}>Cancel</button>
+                            <button className="btn btn-outline" onClick={() => setEditing(false)}>{t('common.cancel')}</button>
                             <button className="btn btn-primary" onClick={handleSave} disabled={saving}
                                 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {saving ? 'Saving...' : <><Save size={14} /> Save Changes</>}
+                                {saving ? t('common.saving') : <><Save size={14} /> {t('profile.saveChanges')}</>}
                             </button>
                         </div>
                     </div>

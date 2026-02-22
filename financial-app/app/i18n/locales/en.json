@@ -33,14 +33,21 @@
     "dashboard": {
         "greeting": "Good {{timeOfDay}}",
         "namaste": "Namaste, {{name}}",
+        "spending": "Spending",
+        "income": "Income",
         "totalSpending": "Total Spending",
         "totalIncome": "Total Income",
         "savings": "Net Savings",
+        "thisMonth": "this month",
+        "financialHealth": "Financial Health",
         "quickActions": "Quick Actions",
         "addExpense": "Add Expense",
         "askAI": "Ask AI",
+        "goals": "Goals",
+        "discover": "Discover",
         "recentTransactions": "Recent Transactions",
         "aiInsight": "FinSaathi AI Insight",
+        "aiAdvisor": "FinSaathi AI Advisor",
         "viewAll": "View All"
     },
     "goals": {
@@ -59,9 +66,12 @@
         "thinking": "Thinking..."
     },
     "expenses": {
+        "addExpense": "Add Expense",
+        "amount": "AMOUNT",
         "enterAmount": "Enter Amount",
         "saveExpense": "Save Expense",
-        "category": "Category",
+        "noteOptional": "NOTE (OPTIONAL)",
+        "category": "CATEGORY",
         "categories": {
             "food": "Food",
             "transport": "Transport",
@@ -74,6 +84,7 @@
         }
     },
     "insights": {
+        "title": "Financial Insights",
         "healthScore": "Financial Health Score",
         "spendingReport": "Spending Report",
         "monthlyTrend": "Monthly Trend",

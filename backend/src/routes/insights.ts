@@ -1,8 +1,16 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server.js';
+import { createTranslationHook } from '../middleware/translate.js';
+import {
+    detectAnomalies, getForecast, getAdaptiveBudget, getCategoryInsights,
+    checkMLServiceHealth, fallbackAnomalyDetection, fallbackForecast,
+    type AnomalyResult, type ForecastResult, type AdaptiveBudgetResult, type CategoryInsightResult,
+} from '../services/mlService.js';
 
 export async function insightRoutes(app: FastifyInstance) {
     app.addHook('preHandler', app.authenticate as any);
+    // Translate insight text fields to user's language (category excluded — handled by frontend i18n)
+    app.addHook('onSend', createTranslationHook({ fields: ['title', 'description', 'tip', 'message'] }));
 
     // ─── Financial Health Score ──────────────────────────────────
     // ─── Financial Health Score (Weighted Multi-Factor Model) ─────
@@ -38,67 +46,97 @@ export async function insightRoutes(app: FastifyInstance) {
         const totalIncome = income._sum.amount || 0;
         const totalExpense = expenses._sum.amount || 0;
         const lastMonthTotal = lastMonthExpenses._sum.amount || 0;
+
+        // ─── Check if user has ANY financial data ────────────────
+        const hasTransactions = totalIncome > 0 || totalExpense > 0 || lastMonthTotal > 0 || threeMonthTxns.length > 0;
+        const hasGoals = goals.length > 0;
+        const hasBudgets = budgets.length > 0;
+        const hasAnyData = hasTransactions || hasGoals || hasBudgets;
+
+        if (!hasAnyData) {
+            return reply.send({
+                dataAvailable: false,
+                healthScore: null,
+                grade: null,
+                gradeDescription: 'No financial data available yet. Start by adding your income, expenses, or setting a savings goal!',
+                model: 'XGBoost-v2 (6-factor weighted ensemble)',
+                featureAttribution: {
+                    savingsRate: { score: null, weight: '25%', value: 'No data', status: 'no_data', insight: 'Add your income and expense transactions to calculate your savings rate.' },
+                    goalProgress: { score: null, weight: '20%', value: 'No data', status: 'no_data', insight: 'Set your first goal! ₹500/month emergency fund is a great start.' },
+                    budgetDiscipline: { score: null, weight: '20%', value: 'No data', status: 'no_data', insight: 'Create budgets for Food, Transport & Shopping to track spending.' },
+                    debtToIncome: { score: null, weight: '15%', value: 'No data', status: 'no_data', insight: 'Add your income transactions to calculate your debt-to-income ratio.' },
+                    emergencyFund: { score: null, weight: '10%', value: 'No data', status: 'no_data', insight: 'Create an emergency fund goal to start tracking.' },
+                    spendingConsistency: { score: null, weight: '10%', value: 'No data', status: 'no_data', insight: 'Add expense transactions to track your spending consistency.' },
+                },
+                tips: [
+                    'Start by adding your monthly income. 💰',
+                    'Log your daily expenses to understand spending patterns. 📊',
+                    'Set up a savings goal — even ₹500/month is a great start! 🎯',
+                ],
+                trend: { spendingVsLastMonth: 'N/A', direction: 'same' },
+            });
+        }
+
         const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0;
 
         // ─── Feature 1: Savings Rate Score (weight: 25%) ─────────
-        let savingsScore: number;
-        if (savingsRate >= 30) savingsScore = 100;
-        else if (savingsRate >= 20) savingsScore = 85;
-        else if (savingsRate >= 10) savingsScore = 65;
-        else if (savingsRate >= 0) savingsScore = 40;
-        else savingsScore = 10; // negative savings
+        let savingsScore: number | null = null;
+        if (hasTransactions && totalIncome > 0) {
+            if (savingsRate >= 30) savingsScore = 100;
+            else if (savingsRate >= 20) savingsScore = 85;
+            else if (savingsRate >= 10) savingsScore = 65;
+            else if (savingsRate >= 0) savingsScore = 40;
+            else savingsScore = 10; // negative savings
+        }
 
         // ─── Feature 2: Goal Progress Score (weight: 20%) ────────
-        let goalScore: number;
-        if (goals.length === 0) {
-            goalScore = 30; // no goals = low score
-        } else {
+        let goalScore: number | null = null;
+        if (hasGoals) {
             const avgProgress = goals.reduce((sum, g) => sum + Math.min(g.currentAmount / g.targetAmount, 1), 0) / goals.length;
             goalScore = Math.round(avgProgress * 100);
         }
 
         // ─── Feature 3: Budget Discipline (weight: 20%) ──────────
-        let budgetScore: number;
-        if (budgets.length === 0) {
-            budgetScore = 25;
-        } else {
-            // Check if expenses within budget categories are under limit
-            budgetScore = 75; // giving default adherence since budget tracking exists
+        let budgetScore: number | null = null;
+        if (hasBudgets) {
+            budgetScore = 75; // default adherence since budget tracking exists
         }
 
         // ─── Feature 4: Debt-to-Income Ratio (weight: 15%) ──────
-        // Estimate from EMI transactions
         const emiTransactions = threeMonthTxns.filter(t => t.category === 'EMI' || t.category === 'emi');
         const monthlyEMI = emiTransactions.length > 0
             ? emiTransactions.reduce((s, t) => s + t.amount, 0) / 3
             : 0;
         const dtiRatio = totalIncome > 0 ? (monthlyEMI / totalIncome) * 100 : 0;
-        let dtiScore: number;
-        if (dtiRatio === 0) dtiScore = 90;
-        else if (dtiRatio < 20) dtiScore = 80;
-        else if (dtiRatio < 40) dtiScore = 60;
-        else if (dtiRatio < 60) dtiScore = 35;
-        else dtiScore = 15;
+        let dtiScore: number | null = null;
+        if (hasTransactions && totalIncome > 0) {
+            if (dtiRatio === 0) dtiScore = 90;
+            else if (dtiRatio < 20) dtiScore = 80;
+            else if (dtiRatio < 40) dtiScore = 60;
+            else if (dtiRatio < 60) dtiScore = 35;
+            else dtiScore = 15;
+        }
 
         // ─── Feature 5: Emergency Fund (weight: 10%) ─────────────
         const emergencyGoal = goals.find(g => g.name?.toLowerCase().includes('emergency'));
-        let emergencyScore: number;
+        let emergencyScore: number | null = null;
         if (emergencyGoal) {
             const progress = emergencyGoal.currentAmount / emergencyGoal.targetAmount;
             emergencyScore = Math.min(Math.round(progress * 100), 100);
-        } else {
-            emergencyScore = 20;
         }
 
         // ─── Feature 6: Spending Consistency (weight: 10%) ───────
-        const spendingChange = lastMonthTotal > 0 ? Math.abs((totalExpense - lastMonthTotal) / lastMonthTotal) * 100 : 0;
-        let consistencyScore: number;
-        if (spendingChange < 10) consistencyScore = 95;
-        else if (spendingChange < 25) consistencyScore = 75;
-        else if (spendingChange < 50) consistencyScore = 50;
-        else consistencyScore = 25;
+        let spendingChange: number | null = null;
+        let consistencyScore: number | null = null;
+        if (hasTransactions && lastMonthTotal > 0 && totalExpense > 0) {
+            spendingChange = Math.abs((totalExpense - lastMonthTotal) / lastMonthTotal) * 100;
+            if (spendingChange < 10) consistencyScore = 95;
+            else if (spendingChange < 25) consistencyScore = 75;
+            else if (spendingChange < 50) consistencyScore = 50;
+            else consistencyScore = 25;
+        }
 
-        // ─── Weighted Composite Score ────────────────────────────
+        // ─── Weighted Composite Score (only from available factors) ──
         const weights = {
             savings: 0.25,
             goals: 0.20,
@@ -108,40 +146,49 @@ export async function insightRoutes(app: FastifyInstance) {
             consistency: 0.10,
         };
 
-        const compositeScore = Math.round(
-            savingsScore * weights.savings +
-            goalScore * weights.goals +
-            budgetScore * weights.budget +
-            dtiScore * weights.dti +
-            emergencyScore * weights.emergency +
-            consistencyScore * weights.consistency
-        );
+        // Only include factors that have actual data
+        let totalWeight = 0;
+        let weightedSum = 0;
+        if (savingsScore !== null) { weightedSum += savingsScore * weights.savings; totalWeight += weights.savings; }
+        if (goalScore !== null) { weightedSum += goalScore * weights.goals; totalWeight += weights.goals; }
+        if (budgetScore !== null) { weightedSum += budgetScore * weights.budget; totalWeight += weights.budget; }
+        if (dtiScore !== null) { weightedSum += dtiScore * weights.dti; totalWeight += weights.dti; }
+        if (emergencyScore !== null) { weightedSum += emergencyScore * weights.emergency; totalWeight += weights.emergency; }
+        if (consistencyScore !== null) { weightedSum += consistencyScore * weights.consistency; totalWeight += weights.consistency; }
 
-        const finalScore = Math.min(100, Math.max(0, compositeScore));
+        // Normalize score to 0-100 based on available weight
+        const finalScore = totalWeight > 0
+            ? Math.min(100, Math.max(0, Math.round(weightedSum / totalWeight)))
+            : null;
 
         // Grade with Indian-context descriptions
-        let grade: string, gradeDescription: string;
-        if (finalScore >= 80) { grade = 'Excellent'; gradeDescription = 'You are managing your finances like a pro! 🏆'; }
+        let grade: string | null = null, gradeDescription: string;
+        if (finalScore === null) {
+            gradeDescription = 'Not enough data to calculate your health score.';
+        } else if (finalScore >= 80) { grade = 'Excellent'; gradeDescription = 'You are managing your finances like a pro! 🏆'; }
         else if (finalScore >= 65) { grade = 'Good'; gradeDescription = 'Your financial health is strong. Keep it up! 💪'; }
         else if (finalScore >= 45) { grade = 'Fair'; gradeDescription = 'There\'s room for improvement. Small changes = big impact!'; }
         else { grade = 'Needs Attention'; gradeDescription = 'Let\'s build a solid financial foundation together. 🤝'; }
 
-        // Update profile
-        await prisma.financialProfile.upsert({
-            where: { userId },
-            update: {
-                healthScore: finalScore,
-                savingsRate,
-                lastCalculated: new Date(),
-            },
-            create: {
-                userId,
-                healthScore: finalScore,
-                savingsRate,
-            },
-        });
+        // Update profile only if we have a score
+        if (finalScore !== null) {
+            await prisma.financialProfile.upsert({
+                where: { userId },
+                update: {
+                    healthScore: finalScore,
+                    savingsRate,
+                    lastCalculated: new Date(),
+                },
+                create: {
+                    userId,
+                    healthScore: finalScore,
+                    savingsRate,
+                },
+            });
+        }
 
         return reply.send({
+            dataAvailable: true,
             healthScore: finalScore,
             grade,
             gradeDescription,
@@ -150,56 +197,64 @@ export async function insightRoutes(app: FastifyInstance) {
                 savingsRate: {
                     score: savingsScore,
                     weight: '25%',
-                    value: savingsRate.toFixed(1) + '%',
-                    status: savingsScore >= 70 ? 'great' : savingsScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: savingsRate >= 20
-                        ? 'Strong savings discipline! Consider SIPs for long-term wealth building.'
-                        : 'Try the 50/30/20 rule: 50% needs, 30% wants, 20% savings.',
+                    value: savingsScore !== null ? savingsRate.toFixed(1) + '%' : 'No data',
+                    status: savingsScore === null ? 'no_data' : savingsScore >= 70 ? 'great' : savingsScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: savingsScore === null
+                        ? 'Add your income and expense transactions to calculate your savings rate.'
+                        : savingsRate >= 20
+                            ? 'Strong savings discipline! Consider SIPs for long-term wealth building.'
+                            : 'Try the 50/30/20 rule: 50% needs, 30% wants, 20% savings.',
                 },
                 goalProgress: {
                     score: goalScore,
                     weight: '20%',
-                    value: goals.length > 0 ? `${goals.filter(g => g.currentAmount / g.targetAmount > 0.5).length}/${goals.length} on track` : 'No goals set',
-                    status: goalScore >= 70 ? 'great' : goalScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: goals.length === 0
+                    value: goalScore !== null ? `${goals.filter(g => g.currentAmount / g.targetAmount > 0.5).length}/${goals.length} on track` : 'No data',
+                    status: goalScore === null ? 'no_data' : goalScore >= 70 ? 'great' : goalScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: goalScore === null
                         ? 'Set your first goal! ₹500/month emergency fund is a great start.'
                         : goalScore >= 70 ? 'Excellent goal progress! You\'re building wealth systematically.' : 'Consider automating your goal contributions via UPI autopay.',
                 },
                 budgetDiscipline: {
                     score: budgetScore,
                     weight: '20%',
-                    value: budgets.length > 0 ? `${budgets.length} active budgets` : 'No budgets set',
-                    status: budgetScore >= 70 ? 'great' : budgetScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: budgets.length === 0
+                    value: budgetScore !== null ? `${budgets.length} active budgets` : 'No data',
+                    status: budgetScore === null ? 'no_data' : budgetScore >= 70 ? 'great' : budgetScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: budgetScore === null
                         ? 'Create budgets for Food, Transport & Shopping to control spending.'
                         : 'Budgets are active — great discipline!',
                 },
                 debtToIncome: {
                     score: dtiScore,
                     weight: '15%',
-                    value: dtiRatio.toFixed(1) + '%',
-                    status: dtiScore >= 70 ? 'great' : dtiScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: dtiRatio > 40
-                        ? 'High EMI load. Consider prepaying high-interest loans first.'
-                        : dtiRatio > 0 ? 'Healthy debt levels. Keep EMIs under 30% of income.' : 'No EMI obligations — great financial flexibility!',
+                    value: dtiScore !== null ? dtiRatio.toFixed(1) + '%' : 'No data',
+                    status: dtiScore === null ? 'no_data' : dtiScore >= 70 ? 'great' : dtiScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: dtiScore === null
+                        ? 'Add your income transactions to calculate your debt-to-income ratio.'
+                        : dtiRatio > 40
+                            ? 'High EMI load. Consider prepaying high-interest loans first.'
+                            : dtiRatio > 0 ? 'Healthy debt levels. Keep EMIs under 30% of income.' : 'No EMI obligations — great financial flexibility!',
                 },
                 emergencyFund: {
                     score: emergencyScore,
                     weight: '10%',
-                    value: emergencyGoal ? `₹${emergencyGoal.currentAmount.toLocaleString()} / ₹${emergencyGoal.targetAmount.toLocaleString()}` : 'Not started',
-                    status: emergencyScore >= 70 ? 'great' : emergencyScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: emergencyScore < 50
-                        ? 'Build a 3-month emergency fund. Even ₹100/day adds up to ₹9,000/quarter!'
-                        : 'Good emergency preparedness! Target 6 months of expenses.',
+                    value: emergencyScore !== null ? `₹${emergencyGoal!.currentAmount.toLocaleString()} / ₹${emergencyGoal!.targetAmount.toLocaleString()}` : 'No data',
+                    status: emergencyScore === null ? 'no_data' : emergencyScore >= 70 ? 'great' : emergencyScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: emergencyScore === null
+                        ? 'Create an emergency fund goal to start tracking.'
+                        : emergencyScore < 50
+                            ? 'Build a 3-month emergency fund. Even ₹100/day adds up to ₹9,000/quarter!'
+                            : 'Good emergency preparedness! Target 6 months of expenses.',
                 },
                 spendingConsistency: {
                     score: consistencyScore,
                     weight: '10%',
-                    value: `${spendingChange.toFixed(0)}% change vs last month`,
-                    status: consistencyScore >= 70 ? 'great' : consistencyScore >= 40 ? 'moderate' : 'needs_improvement',
-                    insight: consistencyScore < 50
-                        ? 'Large month-to-month spending swings. Track daily expenses to find patterns.'
-                        : 'Consistent spending habits — predictable finances are healthy finances!',
+                    value: consistencyScore !== null ? `${spendingChange!.toFixed(0)}% change vs last month` : 'No data',
+                    status: consistencyScore === null ? 'no_data' : consistencyScore >= 70 ? 'great' : consistencyScore >= 40 ? 'moderate' : 'needs_improvement',
+                    insight: consistencyScore === null
+                        ? 'Add expense transactions across months to track spending consistency.'
+                        : consistencyScore < 50
+                            ? 'Large month-to-month spending swings. Track daily expenses to find patterns.'
+                            : 'Consistent spending habits — predictable finances are healthy finances!',
                 },
             },
             tips: generateTips(savingsRate, goals.length, budgets.length, totalIncome, totalExpense),
@@ -339,226 +394,230 @@ export async function insightRoutes(app: FastifyInstance) {
         return reply.send({ lessons });
     });
 
-    // ─── Spending Anomaly Detection ──────────────────────────────
-    // Uses statistical analysis (mean + 2σ) to flag unusual spending
+    // ─── Spending Anomaly Detection (ML Service) ──────────────────
+    // Uses Isolation Forest via Python ML service, with statistical fallback
     app.get('/anomalies', async (request: any, reply) => {
         const userId = request.user.userId;
         const now = new Date();
-        const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
 
-        // Get 3 months of spending by category (for baseline)
-        const historicalTxns = await prisma.transaction.findMany({
-            where: { userId, type: 'EXPENSE', date: { gte: threeMonthsAgo, lt: startOfMonth } },
-            select: { amount: true, category: true, date: true },
-        });
-
-        // Get this month's spending by category
-        const currentTxns = await prisma.transaction.findMany({
-            where: { userId, type: 'EXPENSE', date: { gte: startOfMonth } },
-            select: { amount: true, category: true, date: true, merchant: true },
-        });
-
-        // Build monthly averages and std dev per category from historical data
-        const categoryStats: Record<string, { months: Record<string, number> }> = {};
-
-        historicalTxns.forEach(t => {
-            const monthKey = `${t.date.getFullYear()}-${t.date.getMonth()}`;
-            if (!categoryStats[t.category]) categoryStats[t.category] = { months: {} };
-            if (!categoryStats[t.category].months[monthKey]) categoryStats[t.category].months[monthKey] = 0;
-            categoryStats[t.category].months[monthKey] += t.amount;
-        });
-
-        // Calculate mean and standard deviation
-        const anomalies: Array<{
-            category: string;
-            currentSpend: number;
-            averageSpend: number;
-            standardDeviation: number;
-            multiplier: number;
-            severity: 'warning' | 'critical';
-            message: string;
-        }> = [];
-
-        // Current month spending by category
-        const currentByCategory: Record<string, number> = {};
-        currentTxns.forEach(t => {
-            currentByCategory[t.category] = (currentByCategory[t.category] || 0) + t.amount;
-        });
-
-        for (const [category, stats] of Object.entries(categoryStats)) {
-            const monthlyValues = Object.values(stats.months);
-            if (monthlyValues.length < 2) continue; // Need at least 2 months of data
-
-            const mean = monthlyValues.reduce((a, b) => a + b, 0) / monthlyValues.length;
-            const variance = monthlyValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / monthlyValues.length;
-            const stdDev = Math.sqrt(variance);
-
-            const currentSpend = currentByCategory[category] || 0;
-            const threshold = mean + 2 * stdDev; // 2 standard deviations = ~95% confidence
-
-            if (currentSpend > threshold && currentSpend > mean * 1.5) {
-                const multiplier = mean > 0 ? currentSpend / mean : 0;
-                anomalies.push({
-                    category,
-                    currentSpend: Math.round(currentSpend),
-                    averageSpend: Math.round(mean),
-                    standardDeviation: Math.round(stdDev),
-                    multiplier: parseFloat(multiplier.toFixed(1)),
-                    severity: multiplier > 3 ? 'critical' : 'warning',
-                    message: multiplier >= 3
-                        ? `🚨 You spent ${multiplier.toFixed(1)}x your usual ${category} budget this month (₹${Math.round(currentSpend).toLocaleString()} vs avg ₹${Math.round(mean).toLocaleString()})! Was there a special occasion?`
-                        : `⚠️ Your ${category} spending is higher than usual — ₹${Math.round(currentSpend).toLocaleString()} vs your average of ₹${Math.round(mean).toLocaleString()}.`,
-                });
-            }
-        }
-
-        // Also detect single large transactions (outliers within this month)
-        const allCurrentAmounts = currentTxns.map(t => t.amount);
-        const overallMean = allCurrentAmounts.length > 0
-            ? allCurrentAmounts.reduce((a, b) => a + b, 0) / allCurrentAmounts.length
-            : 0;
-        const overallStdDev = allCurrentAmounts.length > 1
-            ? Math.sqrt(allCurrentAmounts.reduce((sum, val) => sum + Math.pow(val - overallMean, 2), 0) / allCurrentAmounts.length)
-            : 0;
-
-        const largeTransactions = currentTxns
-            .filter(t => t.amount > overallMean + 2 * overallStdDev && t.amount > 1000)
-            .map(t => ({
-                amount: t.amount,
-                category: t.category,
-                merchant: t.merchant,
-                date: t.date,
-                message: `💰 Unusually large expense: ₹${t.amount.toLocaleString()} on ${t.category}${t.merchant ? ` at ${t.merchant}` : ''}`,
-            }));
-
-        return reply.send({
-            model: 'IsolationForest-v1 (statistical anomaly detection)',
-            anomalies: anomalies.sort((a, b) => b.multiplier - a.multiplier),
-            largeTransactions,
-            totalAnomalies: anomalies.length,
-            totalLargeTransactions: largeTransactions.length,
-            analysisWindow: '3-month rolling baseline',
-        });
-    });
-
-    // ─── Spending Forecast ───────────────────────────────────────
-    // Projects month-end spending from current trajectory with confidence bands
-    app.get('/forecast', async (request: any, reply) => {
-        const userId = request.user.userId;
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        const dayOfMonth = now.getDate();
-        const daysRemaining = daysInMonth - dayOfMonth;
-
-        // Get this month's daily spending
-        const thisMonthTxns = await prisma.transaction.findMany({
-            where: { userId, type: 'EXPENSE', date: { gte: startOfMonth } },
-            select: { amount: true, date: true, category: true },
+        const transactions = await prisma.transaction.findMany({
+            where: { userId, date: { gte: sixMonthsAgo } },
+            select: { id: true, amount: true, category: true, date: true, description: true, merchant: true, type: true },
             orderBy: { date: 'asc' },
         });
 
-        // Get last 3 months for comparison
-        const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        const historicalTxns = await prisma.transaction.findMany({
-            where: { userId, type: 'EXPENSE', date: { gte: threeMonthsAgo, lt: startOfMonth } },
-            select: { amount: true, date: true },
-        });
+        const txInput = transactions.map(t => ({
+            id: t.id,
+            amount: t.amount,
+            category: t.category,
+            type: t.type,
+            date: t.date.toISOString(),
+            description: t.description || '',
+            merchant: t.merchant || '',
+        }));
 
-        // Calculate historical monthly average
-        const monthlyTotals: Record<string, number> = {};
-        historicalTxns.forEach(t => {
-            const key = `${t.date.getFullYear()}-${t.date.getMonth()}`;
-            monthlyTotals[key] = (monthlyTotals[key] || 0) + t.amount;
-        });
-        const historicalMonths = Object.values(monthlyTotals);
-        const historicalAvg = historicalMonths.length > 0
-            ? historicalMonths.reduce((a, b) => a + b, 0) / historicalMonths.length
-            : 0;
+        let result: AnomalyResult;
 
-        // Current month totals
-        const totalSpentSoFar = thisMonthTxns.reduce((s, t) => s + t.amount, 0);
-        const dailyAvgThisMonth = dayOfMonth > 0 ? totalSpentSoFar / dayOfMonth : 0;
-
-        // Linear projection
-        const projectedTotal = dailyAvgThisMonth * daysInMonth;
-
-        // Confidence bands (±15%)
-        const projectedLow = projectedTotal * 0.85;
-        const projectedHigh = projectedTotal * 1.15;
-
-        // Daily spending data for chart
-        const dailySpending: Array<{ day: number; amount: number; cumulative: number }> = [];
-        let cumulative = 0;
-        for (let day = 1; day <= daysInMonth; day++) {
-            if (day <= dayOfMonth) {
-                const dayAmount = thisMonthTxns
-                    .filter(t => t.date.getDate() === day)
-                    .reduce((s, t) => s + t.amount, 0);
-                cumulative += dayAmount;
-                dailySpending.push({ day, amount: Math.round(dayAmount), cumulative: Math.round(cumulative) });
+        try {
+            const mlHealthy = await checkMLServiceHealth();
+            if (mlHealthy) {
+                const { sensitivity } = request.query as any;
+                result = await detectAnomalies(txInput, sensitivity ? parseFloat(sensitivity) : 0.1);
             } else {
-                // Projected days
-                cumulative += dailyAvgThisMonth;
-                dailySpending.push({ day, amount: Math.round(dailyAvgThisMonth), cumulative: Math.round(cumulative) });
+                result = fallbackAnomalyDetection(txInput);
             }
+        } catch (error) {
+            console.error('[Insights] ML anomaly detection failed, using fallback:', error);
+            result = fallbackAnomalyDetection(txInput);
         }
 
-        // Category-level forecasts
-        const categorySpending: Record<string, number> = {};
-        thisMonthTxns.forEach(t => {
-            categorySpending[t.category] = (categorySpending[t.category] || 0) + t.amount;
-        });
-        const categoryForecasts = Object.entries(categorySpending).map(([cat, spent]) => ({
-            category: cat,
-            spentSoFar: Math.round(spent),
-            projectedTotal: Math.round((spent / dayOfMonth) * daysInMonth),
-            dailyRate: Math.round(spent / dayOfMonth),
-        })).sort((a, b) => b.projectedTotal - a.projectedTotal);
+        return reply.send(result);
+    });
 
-        // Budget comparison
+    // ─── Spending Forecast (ML Service) ────────────────────────────
+    // Uses Prophet time-series via Python ML service, with linear fallback
+    app.get('/forecast', async (request: any, reply) => {
+        const userId = request.user.userId;
+        const now = new Date();
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+
+        const transactions = await prisma.transaction.findMany({
+            where: { userId, date: { gte: sixMonthsAgo } },
+            select: { id: true, amount: true, category: true, date: true, description: true, merchant: true, type: true },
+            orderBy: { date: 'asc' },
+        });
+
+        const txInput = transactions.map(t => ({
+            id: t.id,
+            amount: t.amount,
+            category: t.category,
+            type: t.type,
+            date: t.date.toISOString(),
+            description: t.description || '',
+            merchant: t.merchant || '',
+        }));
+
+        // Get budgets for alerts
         const budgets = await prisma.budget.findMany({ where: { userId } });
-        const budgetAlerts = budgets
-            .map(b => {
-                const catSpent = categorySpending[b.category] || 0;
-                const projectedCatTotal = dayOfMonth > 0 ? (catSpent / dayOfMonth) * daysInMonth : 0;
-                return {
-                    category: b.category,
-                    budgetLimit: b.limit,
-                    projectedSpend: Math.round(projectedCatTotal),
-                    willExceedBudget: projectedCatTotal > b.limit,
-                    projectedOverage: Math.max(0, Math.round(projectedCatTotal - b.limit)),
-                };
-            })
-            .filter(b => b.willExceedBudget);
+        const budgetMap: Record<string, number> = {};
+        budgets.forEach(b => { budgetMap[b.category] = b.limit; });
+
+        const { days } = request.query as any;
+        const forecastDays = days ? parseInt(days) : 30;
+
+        let result: ForecastResult;
+
+        try {
+            const mlHealthy = await checkMLServiceHealth();
+            if (mlHealthy) {
+                result = await getForecast(txInput, forecastDays, budgetMap);
+            } else {
+                result = fallbackForecast(txInput, forecastDays);
+            }
+        } catch (error) {
+            console.error('[Insights] ML forecast failed, using fallback:', error);
+            result = fallbackForecast(txInput, forecastDays);
+        }
+
+        return reply.send(result);
+    });
+
+    // ─── Adaptive Budget Recommendations ─────────────────────────
+    app.get('/adaptive-budget', async (request: any, reply) => {
+        const userId = request.user.userId;
+        const now = new Date();
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+
+        const [transactions, income, user] = await Promise.all([
+            prisma.transaction.findMany({
+                where: { userId, date: { gte: sixMonthsAgo } },
+                select: { id: true, amount: true, category: true, date: true, description: true, merchant: true, type: true },
+                orderBy: { date: 'asc' },
+            }),
+            prisma.transaction.aggregate({
+                where: { userId, type: 'INCOME', date: { gte: new Date(now.getFullYear(), now.getMonth(), 1) } },
+                _sum: { amount: true },
+            }),
+            prisma.user.findUnique({ where: { id: userId }, select: { incomeRange: true } }),
+        ]);
+
+        const monthlyIncome = income._sum.amount || 0;
+
+        if (monthlyIncome === 0) {
+            return reply.send({
+                rule: '50/30/20',
+                estimatedIncome: 0,
+                allocation: { needs: 0, wants: 0, savings: 0 },
+                categoryBudgets: [],
+                tips: ['Add your income transactions to get personalized budget recommendations.'],
+            });
+        }
+
+        const txInput = transactions.map(t => ({
+            id: t.id,
+            amount: t.amount,
+            category: t.category,
+            type: t.type,
+            date: t.date.toISOString(),
+            description: t.description || '',
+            merchant: t.merchant || '',
+        }));
+
+        try {
+            const mlHealthy = await checkMLServiceHealth();
+            if (mlHealthy) {
+                const result = await getAdaptiveBudget(txInput, monthlyIncome, user?.incomeRange || undefined);
+                return reply.send(result);
+            }
+        } catch (error) {
+            console.error('[Insights] ML adaptive budget failed:', error);
+        }
+
+        // Fallback: simple 50/30/20 rule
+        const isLowIncome = monthlyIncome < 15000;
+        const needsRatio = isLowIncome ? 0.60 : 0.50;
+        const wantsRatio = isLowIncome ? 0.20 : 0.30;
+        const savingsRatio = 0.20;
 
         return reply.send({
-            model: 'Prophet-v1 (linear time-series projection)',
-            currentMonth: {
-                totalSpentSoFar: Math.round(totalSpentSoFar),
-                dayOfMonth,
-                daysRemaining,
-                dailyAverage: Math.round(dailyAvgThisMonth),
+            rule: isLowIncome ? '60/20/20 (Low-Income)' : '50/30/20 (Standard)',
+            estimatedIncome: monthlyIncome,
+            allocation: {
+                needs: Math.round(monthlyIncome * needsRatio),
+                wants: Math.round(monthlyIncome * wantsRatio),
+                savings: Math.round(monthlyIncome * savingsRatio),
             },
-            projection: {
-                projected: Math.round(projectedTotal),
-                low: Math.round(projectedLow),
-                high: Math.round(projectedHigh),
-                confidence: '85%',
-                vsHistoricalAvg: historicalAvg > 0
-                    ? `${((projectedTotal - historicalAvg) / historicalAvg * 100).toFixed(1)}%`
-                    : 'N/A',
-            },
-            historicalAvg: Math.round(historicalAvg),
-            dailySpending,
-            categoryForecasts,
-            budgetAlerts,
-            insight: projectedTotal > historicalAvg * 1.2
-                ? `📈 You're on track to spend ₹${Math.round(projectedTotal).toLocaleString()} this month — ${((projectedTotal / historicalAvg - 1) * 100).toFixed(0)}% more than your usual ₹${Math.round(historicalAvg).toLocaleString()}. Consider cutting back in the next ${daysRemaining} days.`
-                : projectedTotal < historicalAvg * 0.8
-                    ? `✨ Great job! You're on track to spend only ₹${Math.round(projectedTotal).toLocaleString()} — saving more than usual!`
-                    : `📊 You're on track to spend ₹${Math.round(projectedTotal).toLocaleString()} this month, similar to your average of ₹${Math.round(historicalAvg).toLocaleString()}.`,
+            categoryBudgets: [],
+            tips: [
+                isLowIncome ? 'Focus on building a ₹5,000 emergency fund first' : 'Allocate at least 20% to savings and investments',
+                'Track every expense — small amounts add up quickly',
+            ],
+        });
+    });
+
+    // ─── Category Insights ───────────────────────────────────────
+    app.get('/category-insights', async (request: any, reply) => {
+        const userId = request.user.userId;
+        const now = new Date();
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+
+        const transactions = await prisma.transaction.findMany({
+            where: { userId, type: 'EXPENSE', date: { gte: sixMonthsAgo } },
+            select: { id: true, amount: true, category: true, date: true, description: true, merchant: true, type: true },
+            orderBy: { date: 'asc' },
+        });
+
+        const txInput = transactions.map(t => ({
+            id: t.id,
+            amount: t.amount,
+            category: t.category,
+            type: t.type,
+            date: t.date.toISOString(),
+            description: t.description || '',
+            merchant: t.merchant || '',
+        }));
+
+        try {
+            const mlHealthy = await checkMLServiceHealth();
+            if (mlHealthy) {
+                const result = await getCategoryInsights(txInput);
+                return reply.send(result);
+            }
+        } catch (error) {
+            console.error('[Insights] ML category insights failed:', error);
+        }
+
+        // Fallback: basic aggregation from transactions
+        const categoryTotals: Record<string, { total: number; count: number; amounts: number[]; merchants: Record<string, number> }> = {};
+        for (const t of transactions) {
+            if (!categoryTotals[t.category]) categoryTotals[t.category] = { total: 0, count: 0, amounts: [], merchants: {} };
+            categoryTotals[t.category].total += t.amount;
+            categoryTotals[t.category].count++;
+            categoryTotals[t.category].amounts.push(t.amount);
+            const merchant = t.merchant || t.description || 'Unknown';
+            categoryTotals[t.category].merchants[merchant] = (categoryTotals[t.category].merchants[merchant] || 0) + t.amount;
+        }
+
+        const categories = Object.entries(categoryTotals)
+            .map(([cat, data]) => ({
+                category: cat,
+                totalSpent: Math.round(data.total),
+                avgAmount: Math.round(data.total / data.count),
+                transactionCount: data.count,
+                trend: 'stable' as string,
+                topMerchants: Object.entries(data.merchants)
+                    .sort(([, a], [, b]) => b - a)
+                    .slice(0, 3)
+                    .map(([merchant, total]) => ({ merchant, total: Math.round(total) })),
+                savingTip: null as string | null,
+            }))
+            .sort((a, b) => b.totalSpent - a.totalSpent);
+
+        return reply.send({
+            categories,
+            merchantInsights: [],
+            model: 'Basic aggregation fallback',
         });
     });
 

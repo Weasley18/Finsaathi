@@ -30,13 +30,14 @@ You have access to the user's real financial data through the following tools. U
 ${toolContext}
 
 ## Important Rules
-1. NEVER hallucinate financial figures. If you don't have data, say so honestly.
-2. Always base advice on the user's actual data when available.
-3. Keep responses concise (2-4 paragraphs max). Users should not feel overwhelmed.
-4. When recommending investments, always mention risks. Add disclaimer when needed.
-5. For complex decisions (loans, insurance), recommend consulting a human financial advisor.
-6. Respect privacy — never suggest sharing financial data with unknown parties.
-7. If user mentions financial stress, be extra empathetic and practical.
+1. Respond ONLY in English. DO NOT use Hinglish or Hindi words. The system automatically handles translation.
+2. NEVER hallucinate financial figures. If you don't have data, say so honestly.
+3. Always base advice on the user's actual data when available.
+4. Keep responses concise (2-4 paragraphs max). Users should not feel overwhelmed.
+5. When recommending investments, always mention risks. Add disclaimer when needed.
+6. For complex decisions (loans, insurance), recommend consulting a human financial advisor.
+7. Respect privacy — never suggest sharing financial data with unknown parties.
+8. If user mentions financial stress, be extra empathetic and practical.
 
 ## Response Format
 - Use bullet points for lists
@@ -145,6 +146,35 @@ export async function chatWithTools(
             type: 'direct',
             content: 'I ran into a temporary issue. Could you try rephrasing your question? 🙏',
         };
+    }
+}
+
+// ─── Generate Chat Title ─────────────────────────────────────────
+// Creates a concise 3-5 word title from the first message in a chat.
+export async function generateChatTitle(firstMessage: string): Promise<string> {
+    try {
+        const client = getClient();
+        const response = await client.chat({
+            model: OLLAMA_MODEL,
+            messages: [
+                {
+                    role: 'system',
+                    content: 'Generate a concise 3-5 word title summarizing the user\'s chat topic. Return ONLY the title text, no quotes, no punctuation at the end, no explanation.',
+                },
+                { role: 'user', content: firstMessage },
+            ],
+            options: {
+                temperature: 0.3,
+                num_predict: 20,
+            },
+        });
+
+        const title = response.message.content.trim().replace(/^["']|["']$/g, '').slice(0, 80);
+        return title || 'New Chat';
+    } catch (error) {
+        console.error('[Title Gen] Failed:', error);
+        // Fallback: use first N chars of the message
+        return firstMessage.slice(0, 40).trim() + (firstMessage.length > 40 ? '...' : '');
     }
 }
 

@@ -1,5 +1,5 @@
-import { prisma } from '../server.js';
-import { queryDocuments } from './chroma.js';
+import { prisma } from '../server';
+import { queryDocuments } from './chroma';
 
 // ─── MCP Tool Definitions ────────────────────────────────────────
 // These are the structured tool calls the LLM can make to retrieve
@@ -79,6 +79,21 @@ export const MCP_TOOLS: MCPToolCall[] = [
             },
         },
     },
+    {
+        name: 'get_spending_anomalies',
+        description: 'Returns unusual spending patterns detected by ML anomaly detection (Isolation Forest)',
+        parameters: { type: 'object', properties: {} },
+    },
+    {
+        name: 'get_spending_forecast',
+        description: 'Returns predicted spending for the next 30 days using Prophet time-series model',
+        parameters: { type: 'object', properties: {} },
+    },
+    {
+        name: 'get_learning_progress',
+        description: 'Returns user\'s financial literacy progress: completed lessons, quiz scores, streak',
+        parameters: { type: 'object', properties: {} },
+    },
 ];
 
 // ─── Tool Execution ──────────────────────────────────────────────
@@ -157,6 +172,24 @@ export async function executeMCPTool(
                 },
             };
         }
+
+        case 'get_spending_anomalies':
+            return {
+                tool: toolName,
+                data: await getSpendingAnomalies(userId),
+            };
+
+        case 'get_spending_forecast':
+            return {
+                tool: toolName,
+                data: await getSpendingForecast(userId),
+            };
+
+        case 'get_learning_progress':
+            return {
+                tool: toolName,
+                data: await getLearningProgress(userId),
+            };
 
         default:
             return { tool: toolName, data: { error: `Unknown tool: ${toolName}` } };
@@ -472,6 +505,102 @@ async function searchSchemes(query?: string, incomeRange?: string) {
     }
 
     return { schemes: filtered, totalResults: filtered.length };
+}
+
+// ─── Spending Anomalies Tool ─────────────────────────────────────
+async function getSpendingAnomalies(userId: string) {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+    const transactions = await prisma.transaction.findMany({
+        where: { userId, type: 'EXPENSE', date: { gte: threeMonthsAgo } },
+        select: { id: true, amount: true, category: true, date: true, description: true, merchant: true, type: true },
+    });
+
+    // Use fallback statistical method for MCP (faster, no ML service dependency)
+    const { fallbackAnomalyDetection } = await import('./mlService.js');
+    const txInput = transactions.map(t => ({
+        id: t.id,
+        amount: t.amount,
+        category: t.category,
+        type: t.type,
+        date: t.date.toISOString(),
+        description: t.description || '',
+        merchant: t.merchant || '',
+    }));
+
+    const result = fallbackAnomalyDetection(txInput);
+    return {
+        totalAnomalies: result.totalAnomalies,
+        anomalies: result.anomalies.slice(0, 5).map(a => ({
+            category: a.category,
+            amount: a.amount,
+            reason: a.reason,
+        })),
+        summary: result.totalAnomalies > 0
+            ? `Found ${result.totalAnomalies} unusual spending patterns in the last 3 months.`
+            : 'No unusual spending patterns detected.',
+    };
+}
+
+// ─── Spending Forecast Tool ──────────────────────────────────────
+async function getSpendingForecast(userId: string) {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+    const transactions = await prisma.transaction.findMany({
+        where: { userId, type: 'EXPENSE', date: { gte: threeMonthsAgo } },
+        select: { id: true, amount: true, category: true, date: true, description: true, type: true },
+    });
+
+    const { fallbackForecast } = await import('./mlService.js');
+    const txInput = transactions.map(t => ({
+        id: t.id,
+        amount: t.amount,
+        category: t.category,
+        type: t.type,
+        date: t.date.toISOString(),
+        description: t.description || '',
+    }));
+
+    const result = fallbackForecast(txInput, 30);
+    return {
+        predictedMonthlyExpense: result.totalPredicted,
+        avgDailyExpense: result.dailyForecast.length > 0 ? result.dailyForecast[0].predicted : 0,
+        highestCategory: result.categoryForecasts.length > 0 ? result.categoryForecasts[0].category : 'Other',
+        topCategories: result.categoryForecasts
+            .slice(0, 5)
+            .map((cf: any) => ({ category: cf.category, predicted: cf.predicted })),
+    };
+}
+
+// ─── Learning Progress Tool ──────────────────────────────────────
+async function getLearningProgress(userId: string) {
+    const [progress, totalLessons, user] = await Promise.all([
+        prisma.lessonProgress.findMany({
+            where: { userId },
+            include: { lesson: { select: { title: true, category: true } } },
+        }),
+        prisma.lesson.count({ where: { isActive: true } }),
+        prisma.user.findUnique({
+            where: { id: userId },
+            select: { points: true, streakDays: true },
+        }),
+    ]);
+
+    const completed = progress.filter(p => p.completedAt);
+
+    return {
+        totalLessons,
+        completedLessons: completed.length,
+        completionPercentage: totalLessons > 0 ? Math.round((completed.length / totalLessons) * 100) : 0,
+        points: user?.points || 0,
+        streakDays: user?.streakDays || 0,
+        recentLessons: completed.slice(-3).map(p => ({
+            title: p.lesson.title,
+            category: p.lesson.category,
+        })),
+    };
 }
 
 // ─── Format Tools for Ollama System Prompt ─────────────────────

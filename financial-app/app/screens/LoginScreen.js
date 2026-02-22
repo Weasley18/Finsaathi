@@ -6,10 +6,12 @@ import { Sparkles, Phone, Shield, ArrowRight } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import useAuthStore from '../store/authStore';
 import { colors, gradients, glassmorphism } from '../theme';
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen({ navigation }) {
+    const { t } = useTranslation();
     const [step, setStep] = useState('phone'); // 'phone' | 'otp'
     const [phone, setPhone] = useState('');
     const [otp, setOtp] = useState('');
@@ -85,8 +87,8 @@ export default function LoginScreen({ navigation }) {
                                 <Sparkles size={36} color="#000" />
                             </LinearGradient>
                         </View>
-                        <Text style={styles.appName}>FinSaathi</Text>
-                        <Text style={styles.tagline}>Your Money. Your Future. Simplified.</Text>
+                        <Text style={styles.appName}>{t('common.appName')}</Text>
+                        <Text style={styles.tagline}>{t('auth.tagline')}</Text>
                     </Animated.View>
 
                     {/* Form */}
@@ -95,7 +97,7 @@ export default function LoginScreen({ navigation }) {
                             <>
                                 <View style={styles.formHeader}>
                                     <Phone size={20} color={colors.accent} />
-                                    <Text style={styles.formTitle}>Enter Mobile Number</Text>
+                                    <Text style={styles.formTitle}>{t('auth.enterPhone')}</Text>
                                 </View>
                                 <Text style={styles.formSubtitle}>
                                     We'll send you an OTP to verify your identity
@@ -128,7 +130,7 @@ export default function LoginScreen({ navigation }) {
                                             <ActivityIndicator color="#000" />
                                         ) : (
                                             <>
-                                                <Text style={styles.primaryBtnText}>Send OTP</Text>
+                                                <Text style={styles.primaryBtnText}>{t('auth.sendOtp')}</Text>
                                                 <ArrowRight size={18} color="#000" style={{ marginLeft: 8 }} />
                                             </>
                                         )}
@@ -139,7 +141,7 @@ export default function LoginScreen({ navigation }) {
                             <>
                                 <View style={styles.formHeader}>
                                     <Shield size={20} color={colors.accent} />
-                                    <Text style={styles.formTitle}>Verify OTP</Text>
+                                    <Text style={styles.formTitle}>{t('auth.verifyOtp')}</Text>
                                 </View>
                                 <Text style={styles.formSubtitle}>
                                     Enter the 6-digit code sent to +91 {phone}
@@ -169,7 +171,7 @@ export default function LoginScreen({ navigation }) {
                                         {isLoading ? (
                                             <ActivityIndicator color="#000" />
                                         ) : (
-                                            <Text style={styles.primaryBtnText}>Verify & Login</Text>
+                                            <Text style={styles.primaryBtnText}>{t('auth.verifyOtp')}</Text>
                                         )}
                                     </LinearGradient>
                                 </TouchableOpacity>

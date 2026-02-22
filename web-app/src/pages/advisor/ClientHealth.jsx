@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     ArrowLeft, Phone, Calendar, Shield, TrendingUp,
-    Target, AlertTriangle, Save, MessageSquare, Bell
+    Target, AlertTriangle, Save, MessageSquare, Bell, Check
 } from 'lucide-react';
 import { api } from '../../api';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import SendRecommendationModal, { ScheduleCallModal, FlagForReviewModal } from './ActionModals';
 
 // Specific components for this page
 
@@ -76,16 +77,15 @@ export default function ClientHealth() {
     const [client, setClient] = useState(null);
     const [loading, setLoading] = useState(true);
     const [notes, setNotes] = useState('');
+    const [notesList, setNotesList] = useState([]);
+    const [savingNotes, setSavingNotes] = useState(false);
+    const [notesSaved, setNotesSaved] = useState(false);
+    const [showRecModal, setShowRecModal] = useState(false);
+    const [showCallModal, setShowCallModal] = useState(false);
+    const [showFlagModal, setShowFlagModal] = useState(false);
 
-    // Mock data for charts
-    const trendData = [
-        { month: 'Jan', income: 12000, expense: 8000 },
-        { month: 'Feb', income: 12500, expense: 9500 },
-        { month: 'Mar', income: 12000, expense: 7800 },
-        { month: 'Apr', income: 13000, expense: 11000 },
-        { month: 'May', income: 15000, expense: 9000 },
-        { month: 'Jun', income: 14500, expense: 8500 }, // Current
-    ];
+    const [trendData, setTrendData] = useState([]);
+    const [clientGoals, setClientGoals] = useState([]);
 
     useEffect(() => {
         loadClientData();
@@ -93,14 +93,19 @@ export default function ClientHealth() {
 
     const loadClientData = async () => {
         try {
-            // In a real app we'd fetch specific client details
-            // For now we'll fetch via getUserById or reuse dashboard logic
-            // But we don't have a direct "get client detailed profile" endpoint for advisor yet
-            // apart from getAdvisorClients returning list. 
-            // Let's assume we can fetch user details by ID as admin/advisor
             const res = await api.getUserById(id);
             setClient(res.user);
-            // setNotes(res.user.advisorNotes || '');
+            // Load client goals
+            try {
+                const goalsRes = await api.getGoals?.(id) || { goals: [] };
+                setClientGoals(goalsRes.goals || []);
+            } catch { setClientGoals([]); }
+
+            // Load client trends
+            try {
+                const trendsRes = await api.getMonthlyTrend?.(id) || { months: [] };
+                setTrendData(trendsRes.months || []);
+            } catch { setTrendData([]); }
         } catch (err) {
             console.error("Failed to load client", err);
         } finally {
@@ -108,10 +113,36 @@ export default function ClientHealth() {
         }
     };
 
+    const loadNotes = async () => {
+        try {
+            const res = await api.getAdvisorNotes(id);
+            setNotesList(res.notes || []);
+        } catch (err) { console.error('Failed to load notes', err); }
+    };
+
+    useEffect(() => { loadNotes(); }, [id]);
+
+    const saveNotes = async () => {
+        if (!notes.trim()) return;
+        setSavingNotes(true);
+        try {
+            await api.createAdvisorNote(id, notes.trim());
+            setNotes('');
+            setNotesSaved(true);
+            setTimeout(() => setNotesSaved(false), 2000);
+            loadNotes();
+        } catch (err) {
+            console.error('Failed to save notes', err);
+        } finally {
+            setSavingNotes(false);
+        }
+    };
+
     if (loading) return <div style={{ padding: 40, color: 'var(--text-muted)' }}>Loading...</div>;
     if (!client) return <div style={{ padding: 40 }}>Client not found</div>;
 
-    const healthScore = client.financialProfile?.healthScore || 65; // Fallback mock
+    const healthScore = client.financialProfile?.healthScore;
+    const hasHealthScore = healthScore != null;
 
     return (
         <div style={{ paddingBottom: 80 }}> {/* Padding for fixed bottom bar if needed */}
@@ -142,12 +173,16 @@ export default function ClientHealth() {
                                 <Phone size={14} /> {client.phone}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Calendar size={14} /> Member since Mar 2024
+                                <Calendar size={14} /> Member since {client.createdAt ? new Date(client.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'N/A'}
                             </div>
                         </div>
                     </div>
 
-                    <HealthRing score={healthScore} />
+                    {hasHealthScore ? <HealthRing score={healthScore} /> : (
+                        <div style={{ width: 120, height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', border: '3px dashed var(--text-muted)', opacity: 0.5 }}>
+                            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No score</div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -156,41 +191,52 @@ export default function ClientHealth() {
                 {/* ─── Financial Health Breakdown ─── */}
                 <div className="glass-card">
                     <h3 className="section-title">Health Breakdown</h3>
-                    <ProgressBar label="Savings Rate" value={45} color="var(--warning)" />
-                    <ProgressBar label="Spending Discipline" value={72} color="var(--success)" />
-                    <ProgressBar label="Goal Progress" value={55} color="var(--accent)" />
-                    <ProgressBar label="Budget Adherence" value={80} color="var(--success)" />
-                    <ProgressBar label="Emergency Fund" value={30} color="var(--error)" />
+                    {hasHealthScore ? (
+                        <>
+                            <ProgressBar label="Savings Rate" value={Math.round(client.financialProfile?.savingsRate || 0)} color={client.financialProfile?.savingsRate >= 20 ? 'var(--success)' : 'var(--warning)'} />
+                            <ProgressBar label="Overall Health" value={healthScore} color={healthScore >= 70 ? 'var(--success)' : healthScore >= 40 ? 'var(--accent)' : 'var(--error)'} />
+                        </>
+                    ) : (
+                        <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>No health data available for this client</div>
+                    )}
                 </div>
 
                 {/* ─── Monthly Trends Chart ─── */}
                 <div className="glass-card">
                     <h3 className="section-title">Income vs Expenses</h3>
-                    <div style={{ height: 200, width: '100%' }}>
-                        <ResponsiveContainer>
-                            <LineChart data={trendData}>
-                                <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={val => `₹${val / 1000}k`} />
-                                <Tooltip
-                                    contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 12 }}
-                                    itemStyle={{ color: 'var(--text-primary)' }}
-                                />
-                                <Line type="monotone" dataKey="income" stroke="var(--accent-light)" strokeWidth={3} dot={false} />
-                                <Line type="monotone" dataKey="expense" stroke="var(--success)" strokeWidth={3} dot={false} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
+                    {trendData.length > 0 ? (
+                        <div style={{ height: 200, width: '100%' }}>
+                            <ResponsiveContainer>
+                                <LineChart data={trendData}>
+                                    <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
+                                    <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={val => `₹${val / 1000}k`} />
+                                    <Tooltip
+                                        contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 12 }}
+                                        itemStyle={{ color: 'var(--text-primary)' }}
+                                    />
+                                    <Line type="monotone" dataKey="income" stroke="var(--accent-light)" strokeWidth={3} dot={false} />
+                                    <Line type="monotone" dataKey="expense" stroke="var(--success)" strokeWidth={3} dot={false} />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                        <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>No trend data available</div>
+                    )}
                 </div>
 
             </div>
 
             {/* ─── Active Goals ─── */}
             <h3 className="section-title">Active Goals</h3>
-            <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-                <GoalCard name="Emergency Fund" current={25000} target={100000} icon="🛡️" />
-                <GoalCard name="Wedding Savings" current={200000} target={500000} icon="💍" />
-                <GoalCard name="New Bike" current={30000} target={80000} icon="🏍️" />
-            </div>
+            {clientGoals.length > 0 ? (
+                <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                    {clientGoals.map((g, i) => (
+                        <GoalCard key={g.id || i} name={g.name} current={g.currentAmount || 0} target={g.targetAmount || 1} icon="🎯" />
+                    ))}
+                </div>
+            ) : (
+                <div className="glass-card" style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>No active goals for this client</div>
+            )}
 
             <div className="two-col-grid" style={{ marginTop: 24 }}>
                 {/* ─── Advisor Notes ─── */}
@@ -198,38 +244,66 @@ export default function ClientHealth() {
                     <h3 className="section-title">Advisor Notes</h3>
                     <textarea
                         className="input"
-                        rows="5"
+                        rows="3"
                         placeholder="Add private notes about this client..."
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         style={{ resize: 'none', marginBottom: 12 }}
                     />
                     <div style={{ textAlign: 'right' }}>
-                        <button className="btn btn-primary">
-                            <Save size={16} /> Save Notes
+                        <button className="btn btn-primary" onClick={saveNotes} disabled={savingNotes || !notes.trim()}>
+                            {notesSaved ? <><Check size={16} /> Saved!</> : <><Save size={16} /> {savingNotes ? 'Saving...' : 'Save Notes'}</>}
                         </button>
                     </div>
+                    {notesList.length > 0 && (
+                        <div style={{ marginTop: 16, borderTop: '1px solid var(--card-border)', paddingTop: 12 }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Previous Notes</div>
+                            {notesList.slice(0, 5).map((n, i) => (
+                                <div key={i} style={{
+                                    padding: '8px 12px', marginBottom: 6, borderRadius: 8,
+                                    background: 'rgba(186,143,13,0.05)', fontSize: 13,
+                                    borderLeft: '2px solid var(--accent)',
+                                }}>
+                                    <div style={{ color: 'var(--text-secondary)', lineHeight: 1.4 }}>{n.note || n.content}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                                        {new Date(n.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* ─── Quick Actions ─── */}
                 <div className="glass-card">
                     <h3 className="section-title">Actions</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <button className="btn btn-primary" style={{ justifyContent: 'center' }}>
+                        <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={() => setShowRecModal(true)}>
                             <TrendingUp size={16} /> Send Recommendation
                         </button>
-                        <button className="btn btn-secondary" style={{ justifyContent: 'center' }}>
+                        <button className="btn btn-secondary" style={{ justifyContent: 'center' }} onClick={() => setShowCallModal(true)}>
                             <Phone size={16} /> Schedule Call
                         </button>
-                        <button className="btn btn-secondary" style={{ justifyContent: 'center' }}>
+                        <button className="btn btn-secondary" style={{ justifyContent: 'center' }} onClick={() => navigate('/advisor/messages', { state: { clientId: id, clientName: client.name } })}>
                             <MessageSquare size={16} /> Chat
                         </button>
-                        <button className="btn btn-secondary" style={{ justifyContent: 'center', color: 'var(--error)', borderColor: 'rgba(231,76,60,0.3)' }}>
+                        <button className="btn btn-secondary" style={{ justifyContent: 'center', color: 'var(--error)', borderColor: 'rgba(231,76,60,0.3)' }} onClick={() => setShowFlagModal(true)}>
                             <AlertTriangle size={16} /> Flag for Review
                         </button>
                     </div>
                 </div>
             </div>
+
+            {/* ─── Modals ─── */}
+            {showRecModal && (
+                <SendRecommendationModal clientId={id} clientName={client.name} onClose={() => setShowRecModal(false)} />
+            )}
+            {showCallModal && (
+                <ScheduleCallModal clientId={id} clientName={client.name} onClose={() => setShowCallModal(false)} />
+            )}
+            {showFlagModal && (
+                <FlagForReviewModal clientId={id} clientName={client.name} onClose={() => setShowFlagModal(false)} />
+            )}
 
         </div>
     );

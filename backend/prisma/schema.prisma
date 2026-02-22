@@ -53,7 +53,11 @@ enum IncomeRange {
   FROM_10K_TO_25K
   FROM_25K_TO_50K
   FROM_50K_TO_1L
+  FROM_1L_TO_2_5L
+  FROM_2_5L_TO_5L
+  FROM_5L_TO_10L
   ABOVE_1L
+  ABOVE_10L
 }
 
 enum RiskProfile {
@@ -68,10 +72,36 @@ enum AdvisorTier {
   PREMIUM
 }
 
+enum FeeModel {
+  NGO_SUBSIDIZED
+  CSR_FUNDED
+  FLAT_FEE
+  B2B_SPONSORED
+}
+
 enum DifficultyLevel {
   BEGINNER
   INTERMEDIATE
   ADVANCED
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ChatType {
+  AI_CHAT
+  ADVISOR_CLONE
+  COPILOT
+}
+
+enum ContentStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  REJECTED
 }
 
 // ─── Models ──────────────────────────────────────────────────────
@@ -88,9 +118,27 @@ model User {
   tier           AdvisorTier? // Only for ADVISOR role
   businessId     String?      // Stores SEBI ARN or GSTIN for Partners
   avatarUrl      String?
+  areasOfInterest String[]    // Only for END_USER role, used for matching
   isActive      Boolean      @default(true)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  // Partner specific fields
+  legalDocType         String?      // e.g. "CIN", "NGO_REGISTRATION", "PAN"
+  legalDocNumber       String?      
+  registeredAddr       String?
+  regulatoryRegNumber  String?      // e.g. "RBI_REG", "SEBI_REG", "NGO_DARPAN"
+  complianceOfficerEmail String? 
+  complianceOfficerPhone String?
+  technicalContactEmail  String?
+  technicalContactPhone  String?
+  digitalAcceptanceOfTerms Boolean @default(false)
+  hasSignedDataProcessAgreement Boolean @default(false)
+  hasSignedNoPIIAccess   Boolean @default(false)
+  hasSignedNoDataResale  Boolean @default(false)
+  hasSignedBreachReport  Boolean @default(false)
+  webhookUrl             String?    // Checks basic technical readiness
+  oauthCompatible        Boolean @default(false)
 
   // Gamification
   points        Int          @default(0)
@@ -102,10 +150,13 @@ model User {
   budgets          Budget[]
   goals            Goal[]
   chatMessages     ChatMessage[]
+  chatRooms        ChatRoom[]
   documents        Document[]
   badges           Badge[]
   activities       ActivityTracker[]
   financialProfile FinancialProfile?
+  quizAttempts     QuizAttempt[]
+  lessonProgress   LessonProgress[]
   
   // Advisor-Client Relationship
   advisorClients   AdvisorClient[] @relation("AdvisorClients") // Clients assigned to this advisor
@@ -113,6 +164,23 @@ model User {
   notifications    Notification[]
   partnerProducts  PartnerProduct[]
   partnerMatches   PartnerMatch[]
+  advisorProfile   AdvisorProfile?
+
+  // Direct Messaging
+  sentMessages     DirectMessage[] @relation("MessageSender")
+  receivedMessages DirectMessage[] @relation("MessageReceiver")
+
+  // Recommendations
+  sentRecommendations     Recommendation[] @relation("RecommendationAdvisor")
+  receivedRecommendations Recommendation[] @relation("RecommendationClient")
+
+  // Scheduled Calls
+  scheduledCallsAsAdvisor ScheduledCall[] @relation("CallAdvisor")
+  scheduledCallsAsClient  ScheduledCall[] @relation("CallClient")
+
+  // Client Flags
+  flagsCreated  ClientFlag[] @relation("FlagAdvisor")
+  flagsReceived ClientFlag[] @relation("FlagClient")
 
   @@map("users")
 }
@@ -146,6 +214,27 @@ model AdvisorClient {
   @@map("advisor_clients")
 }
 
+model AdvisorProfile {
+  id                        String   @id @default(cuid())
+  userId                    String   @unique
+  businessAddress           String
+  professionalEmail         String
+  sebiCertificateIssueDate  DateTime
+  sebiCertificateExpiryDate DateTime
+  baslMembershipId          String
+  highestQualification      String
+  optionalCertifications    String[]
+  languagesSpoken           String[]
+  areasOfExpertise          String[]
+  feeModel                  FeeModel
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("advisor_profiles")
+}
+
 // Advisor notes, advice, and action plans — indexed into ChromaDB
 // to power the Advisor AI Clone (few-shot RAG mimicry)
 model AdvisorNote {
@@ -176,6 +265,9 @@ model Lesson {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
+  quizzes         Quiz[]
+  lessonProgress  LessonProgress[]
+
   @@map("lessons")
 }
 
@@ -191,6 +283,73 @@ model Scheme {
   updatedAt   DateTime @updatedAt
 
   @@map("schemes")
+}
+
+// ─── Quiz & Learning Progress Models ─────────────────────────────
+
+model Quiz {
+  id           String   @id @default(cuid())
+  lessonId     String
+  question     String
+  options      Json     // JSON array of option strings
+  correctIndex Int
+  explanation  String?
+  points       Int      @default(10)
+  createdAt    DateTime @default(now())
+
+  lesson   Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  attempts QuizAttempt[]
+
+  @@index([lessonId])
+  @@map("quizzes")
+}
+
+model QuizAttempt {
+  id            String   @id @default(cuid())
+  userId        String
+  quizId        String
+  selectedIndex Int
+  isCorrect     Boolean
+  attemptedAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([userId, quizId])
+  @@map("quiz_attempts")
+}
+
+model LessonProgress {
+  id               String   @id @default(cuid())
+  userId           String
+  lessonId         String
+  completedAt      DateTime @default(now())
+  timeSpentSeconds Int      @default(0)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@map("lesson_progress")
+}
+
+model ContentGeneration {
+  id               String        @id @default(cuid())
+  topic            String
+  difficulty       DifficultyLevel @default(BEGINNER)
+  category         String?
+  generatedTitle   String?
+  generatedContent String?       // Full markdown content
+  status           ContentStatus @default(DRAFT)
+  generatedById    String?       // User who triggered generation
+  reviewedById     String?       // Admin who reviewed
+  reviewNote       String?
+  publishedLessonId String?      // ID of the published Lesson if approved
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([status])
+  @@map("content_generations")
 }
 
 model Transaction {
@@ -246,32 +405,53 @@ model Goal {
   @@map("goals")
 }
 
-model ChatMessage {
+model ChatRoom {
   id        String   @id @default(cuid())
   userId    String
-  content   String
-  role      String   // 'user' | 'assistant' | 'system'
-  toolCalls String?  // JSON string of MCP tool calls/results
+  title     String   @default("New Chat")
+  type      ChatType @default(AI_CHAT)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId, type, updatedAt])
+  @@map("chat_rooms")
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  userId     String
+  chatRoomId String?
+  content    String
+  role       String   // 'user' | 'assistant' | 'system'
+  toolCalls  String?  // JSON string of MCP tool calls/results
+  createdAt  DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatRoom ChatRoom? @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([chatRoomId, createdAt])
   @@map("chat_messages")
 }
 
 model Document {
-  id            String   @id @default(cuid())
+  id            String         @id @default(cuid())
   userId        String
-  type          String   // 'pan', 'aadhaar', 'salary_slip', 'bank_statement', 'insurance'
+  type          String         // 'pan', 'sebi_certificate', 'nism_xa', 'nism_xb', 'aadhaar', 'salary_slip', 'bank_statement', 'insurance'
   fileName      String
   storageKey    String
-  extractedData String?  // JSON string of OCR-extracted fields
-  uploadedAt    DateTime @default(now())
+  status        DocumentStatus @default(PENDING)
+  reviewNote    String?        // Admin review note on verification
+  extractedData String?        // JSON string of OCR-extracted fields
+  uploadedAt    DateTime       @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([userId, type])
   @@map("documents")
 }
 
@@ -393,4 +573,80 @@ model ActivityTracker {
 
   @@index([userId, action, createdAt])
   @@map("activity_trackers")
+}
+
+// ─── Advisor-User Interaction Models ─────────────────────────────
+
+model DirectMessage {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  content    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId, receiverId, createdAt])
+  @@index([receiverId, isRead])
+  @@map("direct_messages")
+}
+
+model Recommendation {
+  id        String   @id @default(cuid())
+  advisorId String
+  clientId  String
+  title     String
+  content   String
+  category  String   // 'savings', 'investment', 'insurance', 'debt', 'general'
+  status    String   @default("sent") // 'sent', 'viewed', 'accepted', 'dismissed'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  advisor User @relation("RecommendationAdvisor", fields: [advisorId], references: [id], onDelete: Cascade)
+  client  User @relation("RecommendationClient", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([advisorId])
+  @@map("recommendations")
+}
+
+model ScheduledCall {
+  id          String    @id @default(cuid())
+  advisorId   String
+  clientId    String
+  scheduledAt DateTime
+  duration    Int       @default(30) // minutes
+  notes       String?
+  status      String    @default("scheduled") // 'scheduled', 'completed', 'cancelled', 'missed'
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  advisor User @relation("CallAdvisor", fields: [advisorId], references: [id], onDelete: Cascade)
+  client  User @relation("CallClient", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([advisorId, scheduledAt])
+  @@index([clientId])
+  @@map("scheduled_calls")
+}
+
+model ClientFlag {
+  id         String    @id @default(cuid())
+  advisorId  String
+  clientId   String
+  reason     String
+  priority   String    @default("medium") // 'low', 'medium', 'high', 'critical'
+  status     String    @default("open") // 'open', 'reviewing', 'resolved'
+  resolvedAt DateTime?
+  resolvedBy String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  advisor User @relation("FlagAdvisor", fields: [advisorId], references: [id], onDelete: Cascade)
+  client  User @relation("FlagClient", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([status])
+  @@map("client_flags")
 }

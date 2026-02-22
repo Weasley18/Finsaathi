@@ -86,5 +86,16 @@
         "security": "ಭದ್ರತೆ",
         "notifications": "ಅಧಿಸೂಚನೆಗಳು",
         "logout": "ಲಾಗ್ಔಟ್"
+    },
+    "sip": {
+        "title": "SIP ಕ್ಯಾಲ್ಕುಲೇಟರ್",
+        "monthlyInvestment": "ಮಾಸಿಕ ಹೂಡಿಕೆ",
+        "timePeriod": "ಅವಧಿ",
+        "expectedReturn": "ನಿರೀಕ್ಷಿತ ವಾರ್ಷಿಕ ಲಾಭ",
+        "futureValue": "ನಿಮ್ಮ SIP ಬೆಳೆಯುತ್ತದೆ",
+        "totalInvested": "ಒಟ್ಟು ಹೂಡಿಕೆ",
+        "wealthGained": "ಲಾಭ",
+        "recommendedFunds": "ಶಿಫಾರಸು ಮಾಡಿದ ಫಂಡ್‌ಗಳು",
+        "startSIP": "SIP ಪ್ರಾರಂಭಿಸಿ"
     }
 }

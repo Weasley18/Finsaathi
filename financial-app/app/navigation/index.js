@@ -28,9 +28,22 @@ export default function AppNavigator() {
                 <Stack.Screen name="LinkFinance" component={Screens.LinkFinance} />
                 <Stack.Screen name="AdvisorDashboard" component={Screens.AdvisorDashboard} />
                 <Stack.Screen name="AdvisorClientDetail" component={Screens.AdvisorClientDetail} />
+                <Stack.Screen name="AdvisorCoPilotChat" component={Screens.AdvisorCoPilotChat} />
+                <Stack.Screen name="DirectMessages" component={Screens.DirectMessages} />
+                <Stack.Screen name="Recommendations" component={Screens.Recommendations} />
+                <Stack.Screen name="Notifications" component={Screens.Notifications} />
                 <Stack.Screen name="SIPCalculator" component={Screens.SIPCalculator} />
                 <Stack.Screen name="WaitingRoom" component={Screens.WaitingRoom} />
                 <Stack.Screen name="DiscoverMarketplace" component={Screens.DiscoverMarketplace} />
+                <Stack.Screen name="SMSImport" component={Screens.SMSImport} />
+                <Stack.Screen name="LessonDetail" component={Screens.LessonDetail} />
+                <Stack.Screen name="PredictiveAnalysis" component={Screens.PredictiveAnalysis} />
+                <Stack.Screen name="AdminDashboard" component={Screens.AdminDashboard} />
+                <Stack.Screen name="AdminApprovals" component={Screens.AdminApprovals} />
+                <Stack.Screen name="AdminContent" component={Screens.AdminContent} />
+                <Stack.Screen name="AdminAdvisors" component={Screens.AdminAdvisors} />
+                <Stack.Screen name="PartnerDashboard" component={Screens.PartnerDashboard} />
+                <Stack.Screen name="PartnerProducts" component={Screens.PartnerProducts} />
             </Stack.Navigator>
         </NavigationContainer>
     );
