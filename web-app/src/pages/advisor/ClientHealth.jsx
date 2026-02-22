@@ -97,9 +97,15 @@ export default function ClientHealth() {
             setClient(res.user);
             // Load client goals
             try {
-                const goalsRes = await api.getGoals?.() || { goals: [] };
+                const goalsRes = await api.getGoals?.(id) || { goals: [] };
                 setClientGoals(goalsRes.goals || []);
             } catch { setClientGoals([]); }
+
+            // Load client trends
+            try {
+                const trendsRes = await api.getMonthlyTrend?.(id) || { months: [] };
+                setTrendData(trendsRes.months || []);
+            } catch { setTrendData([]); }
         } catch (err) {
             console.error("Failed to load client", err);
         } finally {
@@ -199,20 +205,20 @@ export default function ClientHealth() {
                 <div className="glass-card">
                     <h3 className="section-title">Income vs Expenses</h3>
                     {trendData.length > 0 ? (
-                    <div style={{ height: 200, width: '100%' }}>
-                        <ResponsiveContainer>
-                            <LineChart data={trendData}>
-                                <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={val => `₹${val / 1000}k`} />
-                                <Tooltip
-                                    contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 12 }}
-                                    itemStyle={{ color: 'var(--text-primary)' }}
-                                />
-                                <Line type="monotone" dataKey="income" stroke="var(--accent-light)" strokeWidth={3} dot={false} />
-                                <Line type="monotone" dataKey="expense" stroke="var(--success)" strokeWidth={3} dot={false} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
+                        <div style={{ height: 200, width: '100%' }}>
+                            <ResponsiveContainer>
+                                <LineChart data={trendData}>
+                                    <XAxis dataKey="month" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
+                                    <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={val => `₹${val / 1000}k`} />
+                                    <Tooltip
+                                        contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 12 }}
+                                        itemStyle={{ color: 'var(--text-primary)' }}
+                                    />
+                                    <Line type="monotone" dataKey="income" stroke="var(--accent-light)" strokeWidth={3} dot={false} />
+                                    <Line type="monotone" dataKey="expense" stroke="var(--success)" strokeWidth={3} dot={false} />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
                     ) : (
                         <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>No trend data available</div>
                     )}

@@ -6,8 +6,10 @@ import { ArrowLeft, Send, MessageSquare, Search, Circle } from 'lucide-react-nat
 import { StatusBar } from 'expo-status-bar';
 import api from '../services/api';
 import { colors, gradients, glassmorphism } from '../theme';
+import useAuthStore from '../store/authStore';
 
 export default function DirectMessages({ navigation, route }) {
+    const { user } = useAuthStore();
     const [conversations, setConversations] = useState([]);
     const [selectedUser, setSelectedUser] = useState(route.params?.userId || null);
     const [selectedName, setSelectedName] = useState(route.params?.userName || '');
@@ -66,7 +68,7 @@ export default function DirectMessages({ navigation, route }) {
     }, [thread]);
 
     const filteredConvos = conversations.filter(c =>
-        !search || c.name?.toLowerCase().includes(search.toLowerCase())
+        !search || c.partner?.name?.toLowerCase().includes(search.toLowerCase())
     );
 
     const formatTime = (d) => {
@@ -100,7 +102,7 @@ export default function DirectMessages({ navigation, route }) {
                             ref={flatListRef}
                             data={thread}
                             renderItem={({ item }) => {
-                                const isMe = item.senderId === '__me__' || item.isMine;
+                                const isMe = item.senderId === '__me__' || item.senderId === user?.id;
                                 return (
                                     <View style={[styles.msgRow, isMe && styles.msgRowUser]}>
                                         <View style={[styles.bubble, isMe ? styles.bubbleUser : styles.bubbleBot]}>
@@ -181,19 +183,19 @@ export default function DirectMessages({ navigation, route }) {
                         renderItem={({ item }) => (
                             <TouchableOpacity
                                 style={styles.convoItem}
-                                onPress={() => { setSelectedUser(item.userId); setSelectedName(item.name); }}
+                                onPress={() => { setSelectedUser(item.partner?.id); setSelectedName(item.partner?.name); }}
                             >
                                 <View style={styles.convoAvatar}>
-                                    <Text style={styles.convoAvatarText}>{(item.name || '?')[0]}</Text>
+                                    <Text style={styles.convoAvatarText}>{(item.partner?.name || '?')[0]}</Text>
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.convoName}>{item.name}</Text>
+                                    <Text style={styles.convoName}>{item.partner?.name || 'Unknown'}</Text>
                                     <Text style={styles.convoPreview} numberOfLines={1}>
-                                        {item.lastMessage || 'No messages yet'}
+                                        {item.lastMessage?.content || 'No messages yet'}
                                     </Text>
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={styles.convoTime}>{item.lastMessageAt ? formatTime(item.lastMessageAt) : ''}</Text>
+                                    <Text style={styles.convoTime}>{item.lastMessage?.createdAt ? formatTime(item.lastMessage.createdAt) : ''}</Text>
                                     {item.unreadCount > 0 && (
                                         <View style={styles.badge}>
                                             <Text style={styles.badgeText}>{item.unreadCount}</Text>
@@ -202,7 +204,7 @@ export default function DirectMessages({ navigation, route }) {
                                 </View>
                             </TouchableOpacity>
                         )}
-                        keyExtractor={item => item.userId}
+                        keyExtractor={item => item.partner?.id || String(Math.random())}
                         style={{ paddingHorizontal: 16 }}
                         ListEmptyComponent={
                             <View style={styles.empty}>

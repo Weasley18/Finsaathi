@@ -2,7 +2,7 @@ import React, { useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TrendingDown, TrendingUp, Zap, ShoppingBag, Lightbulb, Sparkles, Target, CreditCard, PiggyBank, BookOpen, Heart, ArrowUpRight } from 'lucide-react-native';
+import { TrendingDown, TrendingUp, Zap, ShoppingBag, Lightbulb, Sparkles, Target, CreditCard, PiggyBank, BookOpen, Heart, ArrowUpRight, MessageSquare } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import BottomNav from '../components/BottomNav';
 import useFinanceStore from '../store/financeStore';
@@ -205,6 +205,13 @@ export default function Dashboard({ navigation }) {
                 <Target size={20} color={colors.accent} />
               </View>
               <Text style={styles.actionLabel}>{t('dashboard.goals')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('DirectMessages')}>
+              <View style={[styles.actionIcon, { backgroundColor: colors.surfaceLight }]}>
+                <MessageSquare size={20} color={colors.accent} />
+              </View>
+              <Text style={styles.actionLabel}>Chat with Advisor</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('DiscoverMarketplace')}>

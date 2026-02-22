@@ -15,7 +15,7 @@ async function apiFetch(endpoint, options = {}) {
     const headers = {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
-        ...(userLang !== 'en' && { 'X-User-Language': userLang }),
+        'X-User-Language': userLang,
         ...options.headers,
     };
 
@@ -57,7 +57,7 @@ export const api = {
     getTransactions: () => apiFetch('/transactions'),
     createTransaction: (data) => apiFetch('/transactions', { method: 'POST', body: JSON.stringify(data) }),
     getSpendingByCategory: () => apiFetch('/transactions/analytics/by-category'),
-    getMonthlyTrend: () => apiFetch('/transactions/analytics/monthly-trend'),
+    getMonthlyTrend: (clientId) => apiFetch(`/transactions/analytics/monthly-trend${clientId ? `?clientId=${clientId}` : ''}`),
     parseSms: (text) => apiFetch('/transactions/parse-sms', { method: 'POST', body: JSON.stringify({ text }) }),
     parseText: (text) => apiFetch('/transactions/parse-text', { method: 'POST', body: JSON.stringify({ text }) }),
     batchParseSms: (messages) => apiFetch('/transactions/parse-sms/batch', { method: 'POST', body: JSON.stringify({ messages }) }),
@@ -68,7 +68,7 @@ export const api = {
     getBudgetOverview: () => apiFetch('/budgets/overview'),
 
     // Goals
-    getGoals: () => apiFetch('/goals'),
+    getGoals: (clientId) => apiFetch(`/goals${clientId ? `?clientId=${clientId}` : ''}`),
     createGoal: (data) => apiFetch('/goals', { method: 'POST', body: JSON.stringify(data) }),
     contributeToGoal: (id, amount) => apiFetch(`/goals/${id}/contribute`, { method: 'POST', body: JSON.stringify({ amount }) }),
     updateGoal: (id, data) => apiFetch(`/goals/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

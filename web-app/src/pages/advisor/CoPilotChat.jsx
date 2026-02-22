@@ -157,11 +157,11 @@ export default function CoPilotChat() {
         <div style={{ display: 'flex', height: 'calc(100vh - 40px)', gap: 0 }}>
             {/* ── Room Sidebar ── */}
             <div style={{
-                width: 260, minWidth: 260, display: 'flex', flexDirection: 'column',
-                borderRight: '1px solid var(--card-border)', background: 'var(--bg-secondary, rgba(0,0,0,0.2))',
+                width: 280, minWidth: 280, display: 'flex', flexDirection: 'column',
+                borderRight: '1px solid var(--card-border)', background: 'var(--bg-secondary)',
             }}>
-                <div style={{ padding: '16px 12px 8px' }}>
-                    <h4 style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>Co-Pilot Sessions</h4>
+                <div style={{ padding: '20px 16px 12px' }}>
+                    <h4 style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Co-Pilot Sessions</h4>
                     <button
                         onClick={createRoom}
                         style={{
@@ -282,17 +282,46 @@ export default function CoPilotChat() {
                             {messages.length === 0 && (
                                 <div style={{
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                    flex: 1, color: 'var(--text-muted)', gap: 12,
+                                    flex: 1, color: 'var(--text-muted)', gap: 16, padding: '0 20px',
                                 }}>
-                                    <Sparkles size={48} strokeWidth={1} color="var(--accent)" />
-                                    <p style={{ fontSize: 16 }}>Ask your AI Co-Pilot anything about your clients</p>
-                                    <p style={{ fontSize: 13 }}>It has access to your entire client portfolio data</p>
-                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 12 }}>
+                                    <div style={{
+                                        width: 80, height: 80, borderRadius: '50%',
+                                        background: 'linear-gradient(135deg, rgba(186,143,13,0.1), rgba(186,143,13,0.2))',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        marginBottom: 8, boxShadow: '0 0 30px rgba(186, 143, 13, 0.1)'
+                                    }}>
+                                        <Sparkles size={40} color="var(--accent)" />
+                                    </div>
+                                    <h3 style={{ fontSize: 24, color: 'var(--text-primary)', fontWeight: 600, margin: 0, letterSpacing: '-0.5px' }}>Ask your AI Co-Pilot</h3>
+                                    <p style={{ fontSize: 15, maxWidth: 420, textAlign: 'center', lineHeight: 1.5 }}>
+                                        Get instant insights about your clients, portfolio performance, and personalized financial strategies.
+                                    </p>
+                                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 24, maxWidth: 700 }}>
                                         {suggestedQueries.map(q => (
                                             <button
                                                 key={q}
-                                                className="glass-card"
-                                                style={{ padding: '8px 16px', cursor: 'pointer', fontSize: 13, border: '1px solid var(--card-border)' }}
+                                                style={{
+                                                    padding: '10px 18px',
+                                                    cursor: 'pointer',
+                                                    fontSize: 13,
+                                                    border: '1px solid var(--card-border)',
+                                                    borderRadius: 20,
+                                                    background: 'rgba(255,255,255,0.03)',
+                                                    color: 'var(--text-secondary)',
+                                                    transition: 'all 0.2s ease',
+                                                }}
+                                                onMouseEnter={e => {
+                                                    e.currentTarget.style.background = 'rgba(186, 143, 13, 0.15)';
+                                                    e.currentTarget.style.color = 'var(--text-primary)';
+                                                    e.currentTarget.style.borderColor = 'rgba(186, 143, 13, 0.4)';
+                                                    e.currentTarget.style.transform = 'translateY(-1px)';
+                                                }}
+                                                onMouseLeave={e => {
+                                                    e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                                                    e.currentTarget.style.color = 'var(--text-secondary)';
+                                                    e.currentTarget.style.borderColor = 'var(--card-border)';
+                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                }}
                                                 onClick={() => setInput(q)}
                                             >
                                                 {q}
@@ -318,11 +347,12 @@ export default function CoPilotChat() {
                                         {msg.role === 'user' ? <User size={16} color="#000" /> : <Sparkles size={16} color="var(--accent)" />}
                                     </div>
                                     <div style={{
-                                        maxWidth: '70%', padding: '12px 16px', borderRadius: 16,
-                                        background: msg.role === 'user' ? 'var(--accent)' : 'var(--card-bg)',
+                                        maxWidth: '75%', padding: '14px 18px', borderRadius: 18,
+                                        background: msg.role === 'user' ? 'linear-gradient(135deg, var(--accent), var(--accent-light))' : 'var(--card-bg)',
                                         color: msg.role === 'user' ? '#000' : 'var(--text-primary)',
                                         border: msg.role === 'user' ? 'none' : '1px solid var(--card-border)',
-                                        fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap',
+                                        boxShadow: msg.role === 'user' ? '0 4px 12px rgba(186, 143, 13, 0.2)' : 'var(--shadow-card)',
+                                        fontSize: 14.5, lineHeight: 1.6, whiteSpace: 'pre-wrap',
                                     }}>
                                         {msg.content}
                                     </div>
@@ -348,8 +378,10 @@ export default function CoPilotChat() {
 
                         {/* Input */}
                         <div style={{
-                            display: 'flex', gap: 8, padding: '16px',
+                            display: 'flex', gap: 12, padding: '20px',
                             borderTop: '1px solid var(--card-border)',
+                            background: 'var(--bg-secondary)',
+                            alignItems: 'center'
                         }}>
                             <input
                                 type="text"

@@ -3,7 +3,7 @@ import { prisma } from '../server';
 import { z } from 'zod';
 import { executeMCPTool, getToolDescriptionsForPrompt, getToolsForOllama } from '../services/mcp';
 import { getSystemPrompt, chatWithOllama, chatWithTools, generateChatTitle } from '../services/ollama';
-import { preProcessMessage, postProcessResponse, detectLanguage } from '../services/translation';
+import { preProcessMessage, postProcessResponse } from '../services/translation';
 
 const chatSchema = z.object({
     message: z.string().min(1),
@@ -37,11 +37,10 @@ export async function chatRoutes(app: FastifyInstance) {
             isFirstMessage = true;
         }
 
-        // ─── Multilingual: Detect & Translate ─────────────────────
+        // ─── Multilingual: Strictly Use App Language ──────────────────
         const headerLang = request.headers['x-user-language'] as string | undefined;
-        const effectiveLang = headerLang || request.user.language;
-        const userLang = effectiveLang !== 'en' ? effectiveLang : undefined;
-        const translationCtx = await preProcessMessage(message, userLang);
+        const effectiveLang = headerLang || request.user.language || 'en';
+        const translationCtx = await preProcessMessage(message, effectiveLang);
         const englishMessage = translationCtx.translatedInput;
 
         // Save user message (original language)
@@ -69,7 +68,7 @@ export async function chatRoutes(app: FastifyInstance) {
         const chatHistory = recentMessages
             .reverse()
             .slice(0, -1) // Exclude the message we just saved
-            .map(m => ({ role: m.role, content: m.content }));
+            .map((m: any) => ({ role: m.role, content: m.content }));
 
         chatHistory.push({ role: 'user', content: englishMessage });
 
@@ -130,7 +129,7 @@ export async function chatRoutes(app: FastifyInstance) {
         // Auto-title on first message (fire and forget)
         if (isFirstMessage) {
             generateChatTitle(message).then(title => {
-                prisma.chatRoom.update({ where: { id: chatRoomId! }, data: { title } }).catch(() => {});
+                prisma.chatRoom.update({ where: { id: chatRoomId! }, data: { title } }).catch(() => { });
             });
         }
 

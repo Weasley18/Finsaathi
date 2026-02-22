@@ -67,35 +67,6 @@ const LANG_CODE_MAP: Record<string, string> = {
     as: 'asm',
 };
 
-// ─── Language Detection ──────────────────────────────────────────
-// Uses Unicode ranges to detect Indic scripts
-export function detectLanguage(text: string): string {
-    // Devanagari: U+0900-U+097F (Hindi, Marathi)
-    if (/[\u0900-\u097F]/.test(text)) return 'hi';
-    // Tamil: U+0B80-U+0BFF
-    if (/[\u0B80-\u0BFF]/.test(text)) return 'ta';
-    // Telugu: U+0C00-U+0C7F
-    if (/[\u0C00-\u0C7F]/.test(text)) return 'te';
-    // Bengali/Assamese: U+0980-U+09FF
-    if (/[\u0980-\u09FF]/.test(text)) return 'bn';
-    // Gujarati: U+0A80-U+0AFF
-    if (/[\u0A80-\u0AFF]/.test(text)) return 'gu';
-    // Kannada: U+0C80-U+0CFF
-    if (/[\u0C80-\u0CFF]/.test(text)) return 'kn';
-    // Malayalam: U+0D00-U+0D7F
-    if (/[\u0D00-\u0D7F]/.test(text)) return 'ml';
-    // Gurmukhi (Punjabi): U+0A00-U+0A7F
-    if (/[\u0A00-\u0A7F]/.test(text)) return 'pa';
-    // Odia: U+0B00-U+0B7F
-    if (/[\u0B00-\u0B7F]/.test(text)) return 'or';
-
-    // Check for Romanized Hindi (common words)
-    const hindiRomanized = /\b(kya|mera|paisa|kitna|bachat|kharch|kaise|yojana|sip|emi|loan|mujhe|bataao|chahiye|rupaye|paise)\b/i;
-    if (hindiRomanized.test(text)) return 'hi';
-
-    return 'en';
-}
-
 // ─── Helsinki-NLP opus-mt HuggingFace API Call ───────────────────
 async function callOpusMT(
     text: string,
@@ -248,7 +219,7 @@ export interface TranslationContext {
 }
 
 export async function preProcessMessage(message: string, userLanguage?: string): Promise<TranslationContext> {
-    const detectedLang = userLanguage || detectLanguage(message);
+    const detectedLang = userLanguage || 'en';
     const needsTranslation = detectedLang !== 'en';
 
     return {

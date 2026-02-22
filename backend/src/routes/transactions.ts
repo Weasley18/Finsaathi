@@ -388,7 +388,8 @@ If you cannot determine a field, make your best guess or omit it. But "amount" a
 
     // ─── Monthly Trend ──────────────────────────────────────────
     app.get('/analytics/monthly-trend', async (request: any, reply) => {
-        const userId = request.user.userId;
+        const { clientId } = request.query as any;
+        const userId = (request.user.role === 'ADVISOR' && clientId) ? clientId : request.user.userId;
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
