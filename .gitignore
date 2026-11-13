@@ -1,0 +1,25 @@
+# Dependencies / build output
+node_modules/
+dist/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Secrets
+.env
+.env.local
+!.env.example
+!.env.docker.example
+
+# Runtime data — never commit user uploads or local databases
+backend/uploads/
+uploads/
+*.db
+*.db-journal
+dump.rdb
+*.log
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

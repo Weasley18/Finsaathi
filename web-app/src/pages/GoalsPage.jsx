@@ -1,0 +1,298 @@
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { api } from '../api';
+import { Target, Plus, TrendingUp, Sparkles, Flame, Trash2, ArrowUpRight, X } from 'lucide-react';
+
+export default function GoalsPage() {
+    const { t } = useTranslation();
+    const [goals, setGoals] = useState([]);
+    const [summary, setSummary] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [showAdd, setShowAdd] = useState(false);
+    const [showContribute, setShowContribute] = useState(null);
+    const [newGoal, setNewGoal] = useState({ name: '', targetAmount: '', targetDate: '' });
+    const [contributeAmount, setContributeAmount] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const fetchGoals = async () => {
+        try {
+            const data = await api.getGoals();
+            setGoals(data.goals || []);
+            setSummary(data.summary || null);
+        } catch (err) {
+            console.error('Failed to fetch goals:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchGoals(); }, []);
+
+    const handleAdd = async () => {
+        if (!newGoal.name || !newGoal.targetAmount) return;
+        setSaving(true);
+        try {
+            await api.createGoal({
+                name: newGoal.name,
+                targetAmount: parseFloat(newGoal.targetAmount),
+                targetDate: newGoal.targetDate || undefined,
+            });
+            setShowAdd(false);
+            setNewGoal({ name: '', targetAmount: '', targetDate: '' });
+            await fetchGoals();
+        } catch (err) {
+            alert('Failed to create goal. Please try again.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleContribute = async () => {
+        if (!contributeAmount || !showContribute) return;
+        setSaving(true);
+        try {
+            const result = await api.contributeToGoal(showContribute.id, parseFloat(contributeAmount));
+            alert(result.message || 'Contribution added!');
+            setShowContribute(null);
+            setContributeAmount('');
+            await fetchGoals();
+        } catch (err) {
+            alert('Failed to add contribution.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handlePause = async (id) => {
+        if (!confirm('Put this goal on hold?')) return;
+        try {
+            await api.updateGoal(id, { status: 'PAUSED' });
+            await fetchGoals();
+        } catch (err) {
+            alert('Failed to update goal.');
+        }
+    };
+
+    if (loading) return <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>Loading goals...</div>;
+
+    const totalSaved = goals.reduce((s, g) => s + (g.currentAmount || 0), 0);
+    const totalTarget = goals.reduce((s, g) => s + (g.targetAmount || 0), 0);
+
+    return (
+        <div>
+            <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                    <h2>{t('goals.title')}</h2>
+                    <p>{t('goals.subtitle')}</p>
+                </div>
+                <button className="btn btn-primary" onClick={() => setShowAdd(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Plus size={16} /> {t('goals.addGoal')}
+                </button>
+            </header>
+
+            {/* Summary */}
+            <div className="stats-grid" style={{ marginBottom: 24 }}>
+                <div className="glass-card stat-card">
+                    <div className="label">{t('goals.totalSaved')}</div>
+                    <div className="value" style={{ color: 'var(--accent)' }}>₹{totalSaved.toLocaleString('en-IN')}</div>
+                    <div className="trend"><Sparkles size={14} /> {t('goals.acrossGoals')}</div>
+                </div>
+                <div className="glass-card stat-card">
+                    <div className="label">{t('goals.totalTarget')}</div>
+                    <div className="value">₹{totalTarget.toLocaleString('en-IN')}</div>
+                    <div className="trend"><Target size={14} /> {t('goals.combined')}</div>
+                </div>
+                <div className="glass-card stat-card">
+                    <div className="label">{t('goals.activeGoals')}</div>
+                    <div className="value" style={{ color: 'var(--bright-gold)' }}>{summary?.activeGoals || goals.filter(g => g.status === 'ACTIVE').length}</div>
+                    <div className="trend"><TrendingUp size={14} /> {t('goals.inProgress')}</div>
+                </div>
+                <div className="glass-card stat-card">
+                    <div className="label">{t('goals.overallProgress')}</div>
+                    <div className="value" style={{ color: 'var(--success)' }}>{totalTarget > 0 ? ((totalSaved / totalTarget) * 100).toFixed(0) : 0}%</div>
+                    <div className="trend"><ArrowUpRight size={14} /> {t('goals.complete')}</div>
+                </div>
+            </div>
+
+            {/* Goals Grid */}
+            {goals.length === 0 ? (
+                <div className="glass-card" style={{ padding: 60, textAlign: 'center' }}>
+                    <Target size={48} color="var(--text-muted)" style={{ marginBottom: 16 }} />
+                    <h3 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>{t('goals.noGoals')}</h3>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>{t('goals.noGoalsDesc')}</p>
+                    <button className="btn btn-primary" onClick={() => setShowAdd(true)}>{t('goals.createFirst')}</button>
+                </div>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+                    {goals.map(goal => {
+                        const progress = Math.min(goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0, 100);
+                        const isCompleted = goal.status === 'COMPLETED' || progress >= 100;
+
+                        return (
+                            <div key={goal.id} className="glass-card" style={{ padding: 24 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div style={{
+                                            width: 44, height: 44, borderRadius: 12,
+                                            background: isCompleted ? 'var(--success)' : 'rgba(186,143,13,0.15)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        }}>
+                                            <Target size={20} color={isCompleted ? '#fff' : 'var(--accent)'} />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{goal.name}</div>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1 }}>
+                                                {t('goals.target')}: ₹{goal.targetAmount?.toLocaleString('en-IN')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                        {isCompleted && <span className="badge badge-gold">{t('goals.done')}</span>}
+                                        {progress >= 75 && !isCompleted && <Flame size={16} color="var(--warning)" />}
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 12 }}>
+                                    <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)' }}>
+                                        ₹{(goal.currentAmount || 0).toLocaleString('en-IN')}
+                                    </span>
+                                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                                        of ₹{goal.targetAmount?.toLocaleString('en-IN')}
+                                    </span>
+                                </div>
+
+                                <div className="progress-bar" style={{ height: 8, marginBottom: 12 }}>
+                                    <div
+                                        className="progress-bar-fill"
+                                        style={{
+                                            width: `${progress}%`,
+                                            background: isCompleted ? 'var(--success)' : progress >= 50 ? 'var(--accent)' : 'var(--info)',
+                                            transition: 'width 0.5s ease',
+                                        }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, fontSize: 13 }}>
+                                    <span style={{ color: 'var(--text-secondary)' }}>{t('goals.percentComplete', { percent: progress.toFixed(0) })}</span>
+                                    {goal.status === 'PAUSED' ? (
+                                        <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{t('goals.onHold')}</span>
+                                    ) : goal.daysUntilTarget > 0 ? (
+                                        <span style={{ color: 'var(--text-muted)' }}>{t('goals.daysLeft', { days: goal.daysUntilTarget })}</span>
+                                    ) : null}
+                                </div>
+
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    {!isCompleted && goal.status !== 'PAUSED' && (
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={() => { setShowContribute(goal); setContributeAmount(''); }}
+                                            style={{ flex: 1, padding: '10px 16px', fontSize: 13 }}
+                                        >
+                                            <Plus size={14} style={{ marginRight: 4 }} /> {t('goals.addSavings')}
+                                        </button>
+                                    )}
+                                    {goal.status === 'PAUSED' ? (
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={async () => {
+                                                await api.updateGoal(goal.id, { status: 'ACTIVE' });
+                                                await fetchGoals();
+                                            }}
+                                            style={{ flex: 1, padding: '10px 16px', fontSize: 13 }}
+                                        >
+                                            {t('goals.resumeGoal')}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            className="btn btn-outline"
+                                            onClick={() => handlePause(goal.id)}
+                                            style={{ padding: '10px 14px', fontSize: 13, color: 'var(--warning)', borderColor: 'rgba(255,152,0,0.3)' }}
+                                            title="Put on hold"
+                                        >
+                                            {t('goals.pause')}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Add Goal Modal */}
+            {showAdd && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+                }} onClick={() => setShowAdd(false)}>
+                    <div className="glass-card" style={{ padding: 32, width: 440, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                            <h3 style={{ margin: 0 }}>{t('goals.newGoal')}</h3>
+                            <button onClick={() => setShowAdd(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div>
+                                <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>{t('goals.goalName')}</label>
+                                <input className="input" placeholder={t('goals.goalNamePlaceholder')} value={newGoal.name}
+                                    onChange={e => setNewGoal({ ...newGoal, name: e.target.value })}
+                                    style={{ width: '100%', boxSizing: 'border-box' }} />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>{t('goals.targetAmount')}</label>
+                                <input className="input" type="number" placeholder="100000" value={newGoal.targetAmount}
+                                    onChange={e => setNewGoal({ ...newGoal, targetAmount: e.target.value })}
+                                    style={{ width: '100%', boxSizing: 'border-box' }} />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>{t('goals.targetDate')}</label>
+                                <input className="input" type="date" value={newGoal.targetDate}
+                                    onChange={e => setNewGoal({ ...newGoal, targetDate: e.target.value })}
+                                    style={{ width: '100%', boxSizing: 'border-box' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+                                <button className="btn btn-outline" onClick={() => setShowAdd(false)}>{t('common.cancel')}</button>
+                                <button className="btn btn-primary" onClick={handleAdd} disabled={saving || !newGoal.name || !newGoal.targetAmount}>
+                                    {saving ? t('common.creating') : t('goals.createGoal')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Contribute Modal */}
+            {showContribute && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+                }} onClick={() => setShowContribute(null)}>
+                    <div className="glass-card" style={{ padding: 32, width: 400, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                            <h3 style={{ margin: 0 }}>{t('goals.addToGoal', { name: showContribute.name })}</h3>
+                            <button onClick={() => setShowContribute(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 2, display: 'block', marginBottom: 6 }}>{t('goals.amountLabel')}</label>
+                            <input className="input" type="number" placeholder="1000" value={contributeAmount}
+                                onChange={e => setContributeAmount(e.target.value)}
+                                style={{ width: '100%', boxSizing: 'border-box', marginBottom: 12 }} autoFocus />
+                            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
+                                {t('goals.remaining')} ₹{((showContribute.targetAmount || 0) - (showContribute.currentAmount || 0)).toLocaleString('en-IN')}
+                            </p>
+                            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                                <button className="btn btn-outline" onClick={() => setShowContribute(null)}>{t('common.cancel')}</button>
+                                <button className="btn btn-primary" onClick={handleContribute} disabled={saving || !contributeAmount}>
+                                    {saving ? t('common.saving') : t('goals.addSavings')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
